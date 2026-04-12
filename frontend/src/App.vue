@@ -5,7 +5,26 @@
       <small>API status: {{ apiStatus }}</small>
     </header>
 
-    <section ref="viewport" class="viewport" aria-label="3D viewport"></section>
+    <section
+      ref="viewport"
+      class="viewport"
+      aria-label="3D viewport"
+      @dragover.prevent="isDragging = true"
+      @dragleave.prevent="isDragging = false"
+      @drop.prevent="handleDrop"
+      :class="{ 'dragging': isDragging }"
+    >
+      <div v-if="isDragging" class="drop-overlay">
+        <div class="drop-hint">
+          <p>Drop your 3D model here</p>
+          <small>Supported: .obj, .glb, .gltf (+ .mtl for OBJ)</small>
+        </div>
+      </div>
+    </section>
+
+    <div v-if="loadingStatus" class="loading-indicator" :class="loadingStatus.type">
+      <p>{{ loadingStatus.message }}</p>
+    </div>
   </main>
 </template>
 
@@ -13,9 +32,12 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { ModelManager } from './utils/ModelManager.js';
 
 const viewport = ref(null);
 const apiStatus = ref('checking...');
+const isDragging = ref(false);
+const loadingStatus = ref(null);
 
 let renderer;
 let camera;
@@ -24,6 +46,8 @@ let cube;
 let controls;
 let frameId;
 let handleResize;
+let modelManager;
+let currentModel = null;
 
 async function checkApi() {
   try {
@@ -66,6 +90,9 @@ function initThree() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
 
+  // Initialize ModelManager
+  modelManager = new ModelManager(scene);
+
   handleResize = () => {
     const nextWidth = el.clientWidth;
     const nextHeight = el.clientHeight;
@@ -77,9 +104,75 @@ function initThree() {
   window.addEventListener('resize', handleResize);
 }
 
+async function handleDrop(event) {
+  isDragging.value = false;
+  const files = event.dataTransfer.files;
+
+  if (files.length === 0) return;
+
+  // Group files by base name
+  const fileMap = new Map();
+  for (let file of files) {
+    const baseName = file.name.replace(/\.(obj|mtl|glb|gltf)$/i, '');
+    if (!fileMap.has(baseName)) {
+      fileMap.set(baseName, {});
+    }
+    const ext = file.name.split('.').pop().toLowerCase();
+    fileMap.get(baseName)[ext] = file;
+  }
+
+  // Load the first model file found
+  for (let [name, files] of fileMap) {
+    try {
+      const mainFile = files.obj || files.glb || files.gltf;
+      if (!mainFile) continue;
+
+      loadingStatus.value = { type: 'loading', message: `Loading ${mainFile.name}...` };
+
+      // Remove previous model
+      if (currentModel) {
+        modelManager.removeModel('dropped-model');
+        scene.remove(currentModel);
+      }
+
+      // Load the model
+      const model = await modelManager.loadModelFromFiles('dropped-model', mainFile, files.mtl);
+      currentModel = model;
+
+      loadingStatus.value = { type: 'success', message: `Loaded: ${mainFile.name}` };
+      setTimeout(() => {
+        loadingStatus.value = null;
+      }, 2000);
+
+      // Fit camera to model
+      fitCameraToModel(model);
+      break;
+    } catch (error) {
+      console.error('Error loading model:', error);
+      loadingStatus.value = { type: 'error', message: `Failed to load model: ${error.message}` };
+      setTimeout(() => {
+        loadingStatus.value = null;
+      }, 3000);
+    }
+  }
+}
+
+function fitCameraToModel(model) {
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const fov = camera.fov * (Math.PI / 180);
+  let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+  cameraZ *= 1.5;
+
+  const center = box.getCenter(new THREE.Vector3());
+  camera.position.copy(center);
+  camera.position.z += cameraZ;
+  controls.target.copy(center);
+  controls.update();
+}
+
 function animate() {
-  // cube.rotation.x += 0.01;
-  // cube.rotation.y += 0.015;
   controls.update();
   renderer.render(scene, camera);
   frameId = requestAnimationFrame(animate);
@@ -102,6 +195,10 @@ onBeforeUnmount(() => {
   if (cube) {
     cube.geometry.dispose();
     cube.material.dispose();
+  }
+
+  if (modelManager) {
+    modelManager.disposeAll();
   }
 
   if (renderer) {
@@ -140,11 +237,87 @@ onBeforeUnmount(() => {
 }
 
 .viewport {
+  position: relative;
   width: 100%;
   height: calc(100vh - 4rem);
   border: 1px solid #334155;
   border-radius: 0.5rem;
   overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.viewport.dragging {
+  border-color: #3b82f6;
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(59, 130, 246, 0.1);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.drop-hint {
+  text-align: center;
+  pointer-events: none;
+}
+
+.drop-hint p {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #3b82f6;
+}
+
+.drop-hint small {
+  display: block;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+.loading-indicator {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  padding: 1rem 1.5rem;
+  border-radius: 0.5rem;
+  color: white;
+  font-weight: 500;
+  animation: slideIn 0.3s ease;
+  z-index: 20;
+}
+
+.loading-indicator p {
+  margin: 0;
+}
+
+.loading-indicator.loading {
+  background: #3b82f6;
+}
+
+.loading-indicator.success {
+  background: #10b981;
+}
+
+.loading-indicator.error {
+  background: #ef4444;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 </style>
 
