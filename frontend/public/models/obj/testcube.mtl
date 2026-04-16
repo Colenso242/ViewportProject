@@ -1,8 +1,8 @@
 # Material for test cube
 
 newmtl testcube_material
-Ka 0.1 0.1 0.1
+Ka 0.9019608 0.2 0.7254902
 Kd 0.9019608 0.2 0.7254902
-Ks 1.0 1.0 1.0
+Ks 0.9019608 0.2 0.7254902
 Ns 50.0
 

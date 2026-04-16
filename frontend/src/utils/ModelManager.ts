@@ -1,10 +1,22 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 
+type MTLMaterialCreator = ReturnType<MTLLoader['parse']>;
+
+type ModelFormat = 'glb' | 'gltf' | 'obj';
+
 export class ModelManager {
-  constructor(scene) {
+  private scene: THREE.Scene;
+  private gltfLoader: GLTFLoader;
+  private objLoader: OBJLoader;
+  private mtlLoader: MTLLoader;
+  private models: Map<string, THREE.Object3D>;
+  private animations: Map<string, THREE.AnimationClip[]>;
+  private mixers: Map<string, THREE.AnimationMixer>;
+
+  constructor(scene: THREE.Scene) {
     this.scene = scene;
     this.gltfLoader = new GLTFLoader();
     this.objLoader = new OBJLoader();
@@ -16,10 +28,8 @@ export class ModelManager {
 
   /**
    * Detect model format from URL
-   * @param {string} url - Model file path
-   * @returns {string} - 'glb', 'gltf', or 'obj'
    */
-  getModelFormat(url) {
+  private getModelFormat(url: string): ModelFormat {
     const normalizedUrl = url.toLowerCase().split('#')[0].split('?')[0];
     const extension = normalizedUrl.split('.').pop();
     if (extension === 'glb') return 'glb';
@@ -30,19 +40,15 @@ export class ModelManager {
 
   /**
    * Load a 3D model (GLTF/GLB or OBJ format)
-   * @param {string} url - Path to model file
-   * @param {string} name - Unique identifier for the model
-   * @param {object} options - Optional configuration
-   * @returns {Promise<THREE.Object3D>} - Loaded model
    */
-  async loadModel(url, name, options = {}) {
+  async loadModel(url: string, name: string): Promise<THREE.Object3D> {
     try {
       const format = this.getModelFormat(url);
 
       if (format === 'obj') {
-        return await this.loadOBJModel(url, name, options);
+        return await this.loadOBJModel(url, name);
       } else {
-        return await this.loadGLTFModel(url, name, format, options);
+        return await this.loadGLTFModel(url, name, format);
       }
     } catch (error) {
       console.error(`Failed to load model ${name}:`, error);
@@ -52,13 +58,12 @@ export class ModelManager {
 
   /**
    * Load GLTF/GLB model
-   * @private
    */
-  async loadGLTFModel(url, name, format, options) {
+  private loadGLTFModel(url: string, name: string, format: ModelFormat): Promise<THREE.Object3D> {
     return new Promise((resolve, reject) => {
       this.gltfLoader.load(
         url,
-        (gltf) => {
+        (gltf: GLTF) => {
           const model = gltf.scene;
           model.userData.name = name;
           model.userData.format = format;
@@ -82,9 +87,8 @@ export class ModelManager {
 
   /**
    * Load OBJ model with optional MTL
-   * @private
    */
-  async loadOBJModel(url, name, options = {}) {
+  private async loadOBJModel(url: string, name: string): Promise<THREE.Object3D> {
     try {
       // Extract base path for MTL file
       const basePath = url.substring(0, url.lastIndexOf('/') + 1);
@@ -93,14 +97,16 @@ export class ModelManager {
       const mtlUrl = basePath + fileNameWithoutExt + '.mtl';
 
       // Try to load MTL file
-      let materials = null;
+      let materials: MTLMaterialCreator | null = null;
       try {
         materials = await new Promise((resolve, reject) => {
           this.mtlLoader.load(mtlUrl, resolve, undefined, reject);
         });
-        materials.preload();
-        this.objLoader.setMaterials(materials);
-      } catch (mtlError) {
+        if (materials) {
+          materials.preload();
+          this.objLoader.setMaterials(materials);
+        }
+      } catch {
         console.warn(`MTL file not found: ${mtlUrl}. Using default material.`);
         // Continue without MTL - will use default material
       }
@@ -109,7 +115,7 @@ export class ModelManager {
       return new Promise((resolve, reject) => {
         this.objLoader.load(
           url,
-          (model) => {
+          (model: any) => {
             model.userData.name = name;
             model.userData.format = 'obj';
 
@@ -121,9 +127,9 @@ export class ModelManager {
                 roughness: 0.7
               });
 
-              model.traverse((child) => {
-                if (child.isMesh) {
-                  child.material = defaultMaterial;
+              model.traverse((child: any) => {
+                if ((child as THREE.Mesh).isMesh) {
+                  (child as THREE.Mesh).material = defaultMaterial;
                 }
               });
             }
@@ -148,22 +154,18 @@ export class ModelManager {
         );
       });
     } catch (error) {
-      throw new Error(`Failed to load OBJ model: ${error.message}`);
+      throw new Error(`Failed to load OBJ model: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
    * Load a model from File objects (for drag & drop)
-   * @param {string} name - Unique identifier for the model
-   * @param {File} mainFile - The main model file (.obj, .glb, or .gltf)
-   * @param {File} mtlFile - Optional MTL file for OBJ models
-   * @returns {Promise<THREE.Object3D>} - Loaded model
    */
-  async loadModelFromFiles(name, mainFile, mtlFile = null) {
+  async loadModelFromFiles(name: string, mainFile: File, mtlFile?: File | null): Promise<THREE.Object3D> {
     try {
       // Detect format from file name
       const fileName = mainFile.name.toLowerCase();
-      let format = 'glb';
+      let format: ModelFormat = 'glb';
       if (fileName.endsWith('.obj')) format = 'obj';
       else if (fileName.endsWith('.gltf')) format = 'gltf';
       else if (fileName.endsWith('.glb')) format = 'glb';
@@ -181,16 +183,16 @@ export class ModelManager {
 
   /**
    * Load GLTF/GLB model from File object
-   * @private
    */
-  async loadGLTFModelFromFile(name, file, format) {
+  private loadGLTFModelFromFile(name: string, file: File, format: ModelFormat): Promise<THREE.Object3D> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (event) => {
+        const arrayBuffer = event.target?.result as ArrayBuffer;
         this.gltfLoader.parse(
-          event.target.result,
+          arrayBuffer,
           '',
-          (gltf) => {
+          (gltf: GLTF) => {
             const model = gltf.scene;
             model.userData.name = name;
             model.userData.format = format;
@@ -220,18 +222,17 @@ export class ModelManager {
           reject
         );
       };
-      reader.onerror = reject;
+      reader.onerror = () => reject(new Error('Failed to read file'));
       reader.readAsArrayBuffer(file);
     });
   }
 
   /**
    * Load OBJ model from File objects
-   * @private
    */
-  async loadOBJModelFromFiles(name, objFile, mtlFile = null) {
+  private async loadOBJModelFromFiles(name: string, objFile: File, mtlFile?: File | null): Promise<THREE.Object3D> {
     try {
-      let materials = null;
+      let materials: MTLMaterialCreator | null = null;
 
       // Load MTL if provided
       if (mtlFile) {
@@ -239,24 +240,23 @@ export class ModelManager {
           materials = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (event) => {
-              const mtlText = event.target.result;
-              const mtlUrl = URL.createObjectURL(mtlFile);
-              this.mtlLoader.parse(
-                mtlText,
-                mtlUrl.substring(0, mtlUrl.lastIndexOf('/') + 1),
-                (parsedMaterials) => {
-                  parsedMaterials.preload();
-                  resolve(parsedMaterials);
-                },
-                reject
-              );
+              const mtlText = event.target?.result as string;
+              try {
+                const parsedMaterials = this.mtlLoader.parse(mtlText, '');
+                parsedMaterials.preload();
+                resolve(parsedMaterials);
+              } catch (error) {
+                reject(error);
+              }
             };
-            reader.onerror = reject;
+            reader.onerror = () => reject(new Error('Failed to read MTL file'));
             reader.readAsText(mtlFile);
           });
-          this.objLoader.setMaterials(materials);
-        } catch (mtlError) {
-          console.warn(`Failed to load MTL file:`, mtlError);
+          if (materials) {
+            this.objLoader.setMaterials(materials);
+          }
+        } catch {
+          console.warn(`Failed to load MTL file`);
           materials = null;
         }
       }
@@ -265,12 +265,10 @@ export class ModelManager {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (event) => {
-          const objText = event.target.result;
-          const objUrl = URL.createObjectURL(objFile);
-          const basePath = objUrl.substring(0, objUrl.lastIndexOf('/') + 1);
+          const objText = event.target?.result as string;
 
           try {
-            const model = this.objLoader.parse(objText, basePath);
+            const model = this.objLoader.parse(objText);
             model.userData.name = name;
             model.userData.format = 'obj';
 
@@ -282,9 +280,9 @@ export class ModelManager {
                 roughness: 0.7
               });
 
-              model.traverse((child) => {
-                if (child.isMesh) {
-                  child.material = defaultMaterial;
+              model.traverse((child: any) => {
+                if ((child as THREE.Mesh).isMesh) {
+                  (child as THREE.Mesh).material = defaultMaterial;
                 }
               });
             }
@@ -303,47 +301,46 @@ export class ModelManager {
             this.scene.add(model);
             this.models.set(name, model);
 
-            // Cleanup object URLs
-            URL.revokeObjectURL(objUrl);
 
             resolve(model);
           } catch (error) {
             reject(error);
           }
         };
-        reader.onerror = reject;
+        reader.onerror = () => reject(new Error('Failed to read OBJ file'));
         reader.readAsText(objFile);
       });
     } catch (error) {
-      throw new Error(`Failed to load OBJ model: ${error.message}`);
+      throw new Error(`Failed to load OBJ model: ${error instanceof Error ? error.message : String(error)}`);
     }
-   }
+  }
 
-   /**
-    * Get a loaded model by name
-    */
-   getModel(name) {
-     return this.models.get(name);
-   }
+  /**
+   * Get a loaded model by name
+   */
+  getModel(name: string): THREE.Object3D | undefined {
+    return this.models.get(name);
+  }
 
-   /**
-    * Get animations for a model
-    */
-  getAnimations(name) {
+  /**
+   * Get animations for a model
+   */
+  getAnimations(name: string): THREE.AnimationClip[] | undefined {
     return this.animations.get(name);
   }
 
   /**
    * Get animation mixer for a model
+   * @deprecated This method is kept for future use but not currently used in the application
    */
-  getMixer(name) {
+  getMixer(name: string): THREE.AnimationMixer | undefined {
     return this.mixers.get(name);
   }
 
   /**
    * Play an animation on a model (GLTF/GLB only)
    */
-  playAnimation(modelName, animationIndex = 0) {
+  playAnimation(modelName: string, animationIndex = 0): THREE.AnimationAction | null {
     const mixer = this.mixers.get(modelName);
     const animations = this.animations.get(modelName);
 
@@ -360,7 +357,7 @@ export class ModelManager {
   /**
    * Stop all animations for a model
    */
-  stopAnimations(modelName) {
+  stopAnimations(modelName: string): void {
     const mixer = this.mixers.get(modelName);
     if (mixer) {
       mixer.stopAllAction();
@@ -370,21 +367,22 @@ export class ModelManager {
   /**
    * Remove a model and clean up resources
    */
-  removeModel(name) {
+  removeModel(name: string): void {
     const model = this.models.get(name);
     if (model) {
       this.scene.remove(model);
 
       // Dispose geometries and materials
-      model.traverse((child) => {
-        if (child.geometry) {
-          child.geometry.dispose();
+      model.traverse((child: any) => {
+        const meshChild = child as THREE.Mesh;
+        if (meshChild.geometry) {
+          meshChild.geometry.dispose();
         }
-        if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach(mat => mat.dispose());
+        if (meshChild.material) {
+          if (Array.isArray(meshChild.material)) {
+            meshChild.material.forEach((mat: any) => mat.dispose());
           } else {
-            child.material.dispose();
+            meshChild.material.dispose();
           }
         }
       });
@@ -404,7 +402,7 @@ export class ModelManager {
   /**
    * Update all animations (call each frame)
    */
-  updateAnimations(deltaTime) {
+  updateAnimations(deltaTime: number): void {
     this.mixers.forEach((mixer) => {
       mixer.update(deltaTime);
     });
@@ -413,9 +411,17 @@ export class ModelManager {
   /**
    * Dispose all models and clean up resources
    */
-  disposeAll() {
+  disposeAll(): void {
     this.models.forEach((_, name) => {
       this.removeModel(name);
     });
   }
 }
+
+
+
+
+
+
+
+

@@ -12,6 +12,7 @@
     "start": "npm run start --prefix backend"
   },
   "devDependencies": {
+    "@types/three": "^0.183.1",
     "concurrently": "^9.0.1"
   }
 }
