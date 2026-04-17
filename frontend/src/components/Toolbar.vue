@@ -5,6 +5,9 @@
       <button @click="$emit('toggle-tree')" class="toolbar-btn">
         {{ showObjectTree ? '✕' : '☰' }} Objects
       </button>
+      <button @click="$emit('toggle-ghosting')" class="toolbar-btn toolbar-btn-secondary">
+        {{ ghostingEnabled ? 'Ghosting: ON' : 'Ghosting: OFF' }}
+      </button>
       <small>API status: {{ apiStatus }}</small>
     </div>
   </header>
@@ -14,10 +17,12 @@
 defineProps<{
   apiStatus: string;
   showObjectTree: boolean;
+  ghostingEnabled: boolean;
 }>();
 
 defineEmits<{
   'toggle-tree': [];
+  'toggle-ghosting': [];
 }>();
 </script>
 
@@ -57,6 +62,14 @@ defineEmits<{
 
 .toolbar-btn:hover {
   background: #2563eb;
+}
+
+.toolbar-btn-secondary {
+  background: #475569;
+}
+
+.toolbar-btn-secondary:hover {
+  background: #334155;
 }
 </style>
 

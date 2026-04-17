@@ -3,7 +3,9 @@
     <Toolbar
       :api-status="apiStatus"
       :show-object-tree="showObjectTree"
+      :ghosting-enabled="ghostingEnabled"
       @toggle-tree="toggleObjectTree"
+      @toggle-ghosting="toggleGhosting"
     />
 
     <div class="main-container">
@@ -39,7 +41,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, computed, ComponentPublicInstance } from 'vue';
+import { onBeforeUnmount, onMounted, ref, shallowRef, computed, ComponentPublicInstance } from 'vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ModelManager } from './utils/ModelManager';
@@ -61,6 +63,7 @@ const apiStatus = ref<string>('checking...');
 const isDragging = ref<boolean>(false);
 const loadingStatus = ref<LoadingStatusType | null>(null);
 const showObjectTree = ref<boolean>(false);
+const ghostingEnabled = ref<boolean>(true);
 const selectedObject = ref<THREE.Object3D | null>(null);
 const hoveredObject = ref<THREE.Object3D | null>(null);
 
@@ -72,7 +75,7 @@ let controls: OrbitControls;
 let frameId: number;
 let handleResize: (() => void) | undefined;
 let modelManager: ModelManager;
-let currentModel: THREE.Object3D | null = null;
+const currentModel = shallowRef<THREE.Object3D | null>(null);
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 
@@ -86,10 +89,10 @@ interface MeshMaterialState {
 const meshMaterialStates = new Map<string, MeshMaterialState>();
 
 const objectTreeItems = computed(() => {
-  if (!currentModel) return [];
+  if (!currentModel.value) return [];
   const items: THREE.Object3D[] = [];
-  currentModel.traverse((child) => {
-    if (child !== currentModel) {
+  currentModel.value.traverse((child) => {
+    if (child !== currentModel.value) {
       items.push(child);
     }
   });
@@ -172,6 +175,11 @@ function toggleObjectTree(): void {
   showObjectTree.value = !showObjectTree.value;
 }
 
+function toggleGhosting(): void {
+  ghostingEnabled.value = !ghostingEnabled.value;
+  applyInteractionMaterials();
+}
+
 function handleViewportClick(event: MouseEvent): void {
   const hit = pickObject(event);
   if (hit) {
@@ -210,7 +218,7 @@ function handleViewportPointerLeave(): void {
 
 function pickObject(event: MouseEvent): THREE.Object3D | null {
   const viewportEl = (viewportComponent.value as any)?.viewportElement;
-  if (!viewportEl || !currentModel) {
+  if (!viewportEl || !currentModel.value) {
     return null;
   }
 
@@ -219,7 +227,7 @@ function pickObject(event: MouseEvent): THREE.Object3D | null {
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
 
-  const intersects = raycaster.intersectObject(currentModel, true);
+  const intersects = raycaster.intersectObject(currentModel.value, true);
   return intersects[0]?.object ?? null;
 }
 
@@ -325,15 +333,17 @@ function resolveFocusedMesh(): THREE.Mesh | null {
 }
 
 function applyInteractionMaterials(): void {
-  if (!currentModel || meshMaterialStates.size === 0) return;
+  if (!currentModel.value || meshMaterialStates.size === 0) return;
 
   const focusedMesh = resolveFocusedMesh();
 
   meshMaterialStates.forEach((state) => {
     if (focusedMesh && state.mesh.uuid === focusedMesh.uuid) {
       state.mesh.material = state.highlight;
-    } else {
+    } else if (focusedMesh) {
       state.mesh.material = state.ghost;
+    } else {
+      state.mesh.material = ghostingEnabled.value ? state.ghost : state.original;
     }
   });
 }
@@ -367,16 +377,16 @@ async function handleDrop(event: DragEvent): Promise<void> {
       console.log('Loading model:', mainFile.name);
 
       // Remove previous model
-      if (currentModel) {
+      if (currentModel.value) {
         clearInteractionMaterials();
         modelManager.removeModel('dropped-model');
-        scene.remove(currentModel);
-        currentModel = null;
+        scene.remove(currentModel.value);
+        currentModel.value = null;
       }
 
       // Load the model
       const model = await modelManager.loadModelFromFiles('dropped-model', mainFile, files.mtl);
-      currentModel = model;
+      currentModel.value = model;
       buildInteractionMaterials(model);
       console.log('Model loaded successfully:', model);
 
