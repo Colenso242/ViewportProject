@@ -29,6 +29,7 @@
         <template #info>
           <ObjectInfo
             :selected-object="selectedObject"
+            :hovered-object="hoveredObject"
             @close="deselectObject"
             @toggle-visibility="selectedObject.visible = !selectedObject.visible"
           />
@@ -205,15 +206,24 @@ function deselectObject(): void {
 function handleViewportPointerMove(event: MouseEvent): void {
   const hit = pickObject(event);
   if (hit) {
-    selectObject(hit);
+    if (hoveredObject.value !== hit) {
+      hoveredObject.value = hit;
+      applyInteractionMaterials();
+    }
     return;
   }
 
-  deselectObject();
+  if (hoveredObject.value !== null) {
+    hoveredObject.value = null;
+    applyInteractionMaterials();
+  }
 }
 
 function handleViewportPointerLeave(): void {
-  deselectObject();
+  if (hoveredObject.value !== null) {
+    hoveredObject.value = null;
+    applyInteractionMaterials();
+  }
 }
 
 function pickObject(event: MouseEvent): THREE.Object3D | null {

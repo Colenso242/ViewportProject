@@ -1,4 +1,13 @@
 <template>
+  <div v-if="hoveredObject && !selectedObject" class="object-info hover-overview">
+    <div class="info-header">
+      <strong>{{ hoveredObject.name || 'Object' }}</strong>
+    </div>
+    <div class="info-content">
+      <p><strong>Type:</strong> {{ hoveredObject.type }}</p>
+      <p class="hint">Click to select to see more</p>
+    </div>
+  </div>
   <div v-if="selectedObject" class="object-info">
     <div class="info-header">
       <strong>{{ selectedObject.name || 'Object' }}</strong>
@@ -26,6 +35,7 @@ import * as THREE from 'three';
 
 defineProps<{
   selectedObject: THREE.Object3D | null;
+  hoveredObject?: THREE.Object3D | null;
 }>();
 
 defineEmits<{
@@ -46,6 +56,17 @@ defineEmits<{
   max-width: 300px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
   z-index: 15;
+}
+
+.hover-overview {
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.hint {
+  color: #94a3b8;
+  font-style: italic;
+  margin-top: 0.5rem !important;
 }
 
 .info-header {
