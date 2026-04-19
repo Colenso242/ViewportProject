@@ -8,26 +8,6 @@
       <p class="hint">Click to select to see more</p>
     </div>
   </div>
-  <div v-if="selectedObject" class="object-info">
-    <div class="info-header">
-      <strong>{{ selectedObject.name || 'Object' }}</strong>
-      <button @click="$emit('close')" class="close-btn">✕</button>
-    </div>
-    <div class="info-content">
-      <p><strong>Type:</strong> {{ selectedObject.type }}</p>
-      <p v-if="selectedObject.geometry">
-        <strong>Geometry:</strong> {{ selectedObject.geometry.type || 'Unknown' }}
-      </p>
-      <label class="toggle-visibility">
-        <input
-          type="checkbox"
-          :checked="selectedObject.visible"
-          @change="$emit('toggle-visibility')"
-        />
-        Visible
-      </label>
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -38,10 +18,7 @@ defineProps<{
   hoveredObject?: THREE.Object3D | null;
 }>();
 
-defineEmits<{
-  'close': [];
-  'toggle-visibility': [];
-}>();
+
 </script>
 
 <style scoped>
@@ -78,25 +55,6 @@ defineEmits<{
   border-bottom: 1px solid #334155;
 }
 
-.close-btn {
-  background: none;
-  border: none;
-  color: #f8fafc;
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 0;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s ease;
-}
-
-.close-btn:hover {
-  color: #ef4444;
-}
-
 .info-content {
   padding: 1rem;
 }
@@ -104,19 +62,6 @@ defineEmits<{
 .info-content p {
   margin: 0 0 0.5rem 0;
   font-size: 0.875rem;
-}
-
-.toggle-visibility {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  font-size: 0.875rem;
-  margin-top: 0.5rem;
-}
-
-.toggle-visibility input {
-  cursor: pointer;
 }
 </style>
 

@@ -30,11 +30,16 @@
           <ObjectInfo
             :selected-object="selectedObject"
             :hovered-object="hoveredObject"
-            @close="deselectObject"
-            @toggle-visibility="selectedObject.visible = !selectedObject.visible"
           />
         </template>
       </Viewport3D>
+
+      <PropertiesPanel
+        v-if="selectedObject"
+        :selected-object="selectedObject"
+        @close="deselectObject"
+        @toggle-visibility="selectedObject.visible = !selectedObject.visible"
+      />
     </div>
 
     <LoadingIndicator :loading-status="loadingStatus" />
@@ -50,6 +55,7 @@ import Toolbar from './components/Toolbar.vue';
 import ObjectTree from './components/ObjectTree.vue';
 import Viewport3D from './components/Viewport3D.vue';
 import ObjectInfo from './components/ObjectInfo.vue';
+import PropertiesPanel from './components/PropertiesPanel.vue';
 import LoadingIndicator from './components/LoadingIndicator.vue';
 import './App.css';
 
