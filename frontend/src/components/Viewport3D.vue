@@ -19,6 +19,7 @@
     </div>
 
     <slot name="info"></slot>
+    <slot name="overlay"></slot>
   </section>
 </template>
 
@@ -88,4 +89,3 @@ defineExpose({
   font-size: 0.875rem;
 }
 </style>
-

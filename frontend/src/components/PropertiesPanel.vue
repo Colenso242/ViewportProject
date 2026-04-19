@@ -48,6 +48,29 @@
       </div>
 
       <div class="prop-group">
+        <h3>IoT Sensor Link</h3>
+        <select v-model="linkedSensor" @change="updateLink" class="sensor-select">
+          <option value="">-- No Sensor --</option>
+          <option v-for="sensor in sensorsInfo" :key="sensor.id" :value="sensor.id">
+            {{ sensor.id }} ({{ sensor.type }})
+          </option>
+        </select>
+
+        <div v-if="linkedSensorData" class="sensor-live-data">
+          <div class="prop-row">
+            <span class="prop-label">Live Value</span>
+            <span class="prop-value" :style="{ color: linkedSensorData.isCritical ? '#ef4444' : '#10b981' }">
+              {{ linkedSensorData.value }} {{ linkedSensorData.unit }}
+            </span>
+          </div>
+          <div class="prop-row">
+            <span class="prop-label">Threshold</span>
+            <span class="prop-value">{{ linkedSensorData.threshold }} {{ linkedSensorData.unit }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="prop-group">
         <h3>Transform</h3>
         <div class="transform-grid">
           <div class="transform-lbl">Position</div>
@@ -72,15 +95,39 @@
 
 <script setup lang="ts">
 import * as THREE from 'three';
+import { ref, watch, computed } from 'vue';
 
-defineProps<{
+const props = defineProps<{
   selectedObject: THREE.Object3D | null;
+  sensorsInfo?: any[];
+  sensorMappings?: Record<string, string>;
+  sensorData?: Record<string, any>;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   'close': [];
   'toggle-visibility': [];
+  'update-mapping': [uuid: string, sensorId: string];
 }>();
+
+const linkedSensor = ref('');
+
+watch(() => props.selectedObject, (obj) => {
+  if (obj && props.sensorMappings) {
+    linkedSensor.value = props.sensorMappings[obj.uuid] || '';
+  }
+}, { immediate: true });
+
+function updateLink() {
+  if (props.selectedObject) {
+    emit('update-mapping', props.selectedObject.uuid, linkedSensor.value);
+  }
+}
+
+const linkedSensorData = computed(() => {
+  if (!linkedSensor.value || !props.sensorData) return null;
+  return props.sensorData[linkedSensor.value];
+});
 </script>
 
 <style scoped>
@@ -195,6 +242,23 @@ defineEmits<{
   font-size: 0.8rem;
   display: flex;
   align-items: center;
+}
+
+.sensor-select {
+  width: 100%;
+  padding: 0.5rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  border-radius: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.sensor-live-data {
+  background: rgba(15, 23, 42, 0.5);
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  border-left: 2px solid #3b82f6;
 }
 
 .transform-grid div:not(.transform-lbl) {

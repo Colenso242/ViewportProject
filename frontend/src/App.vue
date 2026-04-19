@@ -32,13 +32,27 @@
             :hovered-object="hoveredObject"
           />
         </template>
+        <template #overlay>
+          <SensorOverlay
+            v-if="camera && currentModel && viewportComponent"
+            :camera="camera"
+            :viewportEl="(viewportComponent as any)?.viewportElement"
+            :currentModel="currentModel"
+            :sensorMappings="sensorMappings"
+            :sensorData="sensorData"
+          />
+        </template>
       </Viewport3D>
 
       <PropertiesPanel
         v-if="selectedObject"
         :selected-object="selectedObject"
+        :sensors-info="sensorsInfo"
+        :sensor-mappings="sensorMappings"
+        :sensor-data="sensorData"
         @close="deselectObject"
         @toggle-visibility="selectedObject.visible = !selectedObject.visible"
+        @update-mapping="handleMappingUpdate"
       />
     </div>
 
@@ -50,12 +64,14 @@
 import { onBeforeUnmount, onMounted, ref, shallowRef, computed, ComponentPublicInstance } from 'vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { io, Socket } from 'socket.io-client';
 import { ModelManager } from './utils/ModelManager';
 import Toolbar from './components/Toolbar.vue';
 import ObjectTree from './components/ObjectTree.vue';
 import Viewport3D from './components/Viewport3D.vue';
 import ObjectInfo from './components/ObjectInfo.vue';
 import PropertiesPanel from './components/PropertiesPanel.vue';
+import SensorOverlay from './components/SensorOverlay.vue';
 import LoadingIndicator from './components/LoadingIndicator.vue';
 import './App.css';
 
@@ -74,7 +90,14 @@ const ghostingEnabled = ref<boolean>(true);
 const selectedObject = ref<THREE.Object3D | null>(null);
 const hoveredObject = ref<THREE.Object3D | null>(null);
 
+// IoT Data
+const ioSocket = ref<Socket | null>(null);
+const sensorData = ref<Record<string, any>>({});
+const sensorsInfo = ref<any[]>([]);
+const sensorMappings = ref<Record<string, string>>({}); // uuid -> sensorId
+
 let renderer: THREE.WebGLRenderer;
+let cameraRef = shallowRef<THREE.PerspectiveCamera | null>(null);
 let camera: THREE.PerspectiveCamera;
 let scene: THREE.Scene;
 let cube: THREE.Mesh | undefined;
@@ -91,6 +114,7 @@ interface MeshMaterialState {
   original: THREE.Material | THREE.Material[];
   ghost: THREE.Material | THREE.Material[];
   highlight: THREE.Material | THREE.Material[];
+  critical: THREE.Material | THREE.Material[];
 }
 
 const meshMaterialStates = new Map<string, MeshMaterialState>();
@@ -163,6 +187,8 @@ function initThree(): void {
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
   controls.autoRotate = false;
+
+  cameraRef.value = camera;
 
   // Initialize ModelManager
   modelManager = new ModelManager(scene);
@@ -282,6 +308,32 @@ function createHighlightMaterial(material: THREE.Material): THREE.Material {
   return highlight;
 }
 
+function createCriticalMaterial(material: THREE.Material): THREE.Material {
+  const crit = material.clone();
+  const typedCrit = crit as THREE.Material & {
+    color?: THREE.Color;
+    emissive?: THREE.Color;
+    emissiveIntensity?: number;
+    transparent?: boolean;
+    opacity?: number;
+    depthWrite?: boolean;
+  };
+
+  typedCrit.transparent = true;
+  typedCrit.opacity = 0.9;
+  typedCrit.depthWrite = true;
+
+  if (typedCrit.color) {
+    typedCrit.color = typedCrit.color.clone().lerp(new THREE.Color(0xef4444), 0.8);
+  }
+  if (typedCrit.emissive) {
+    typedCrit.emissive = new THREE.Color(0x990000);
+    typedCrit.emissiveIntensity = 0.8;
+  }
+
+  return crit;
+}
+
 function buildInteractionMaterials(model: THREE.Object3D): void {
   clearInteractionMaterials();
 
@@ -298,12 +350,16 @@ function buildInteractionMaterials(model: THREE.Object3D): void {
     const highlight = Array.isArray(original)
       ? original.map((material) => createHighlightMaterial(material))
       : createHighlightMaterial(original);
+    const critical = Array.isArray(original)
+      ? original.map((material) => createCriticalMaterial(material))
+      : createCriticalMaterial(original);
 
     meshMaterialStates.set(mesh.uuid, {
       mesh,
       original,
       ghost,
-      highlight
+      highlight,
+      critical
     });
   });
 
@@ -311,7 +367,7 @@ function buildInteractionMaterials(model: THREE.Object3D): void {
 }
 
 function clearInteractionMaterials(): void {
-  meshMaterialStates.forEach(({ mesh, original, ghost, highlight }) => {
+  meshMaterialStates.forEach(({ mesh, original, ghost, highlight, critical }) => {
     if (mesh.material !== original) {
       mesh.material = original;
     }
@@ -321,6 +377,9 @@ function clearInteractionMaterials(): void {
 
     const highlightMaterials = Array.isArray(highlight) ? highlight : [highlight];
     highlightMaterials.forEach((material) => material.dispose());
+
+    const criticalMaterials = Array.isArray(critical) ? critical : [critical];
+    criticalMaterials.forEach((material) => material.dispose());
   });
 
   meshMaterialStates.clear();
@@ -353,15 +412,45 @@ function applyInteractionMaterials(): void {
 
   const focusedMesh = resolveFocusedMesh();
 
+  // Determine if a material should be purely critical
+  const time = Date.now() * 0.003;
+  const pulseIntensity = (Math.sin(time) + 1) / 2; // 0 to 1
+
   meshMaterialStates.forEach((state) => {
+    const sensorId = sensorMappings.value[state.mesh.uuid];
+    let isCritical = false;
+
+    if (sensorId && sensorData.value[sensorId]?.isCritical) {
+      isCritical = true;
+
+      // Update the critical material's emissive intensity dynamically for pulsing
+      const crits = Array.isArray(state.critical) ? state.critical : [state.critical];
+      crits.forEach(m => {
+        if ((m as any).emissiveIntensity !== undefined) {
+          (m as any).emissiveIntensity = 0.5 + pulseIntensity * 0.5; // pulses between 0.5 and 1.0
+        }
+      });
+    }
+
     if (focusedMesh && state.mesh.uuid === focusedMesh.uuid) {
-      state.mesh.material = state.highlight;
+      state.mesh.material = isCritical ? state.critical : state.highlight;
     } else if (focusedMesh) {
       state.mesh.material = state.ghost;
     } else {
-      state.mesh.material = ghostingEnabled.value ? state.ghost : state.original;
+      if (isCritical) {
+        state.mesh.material = state.critical;
+      } else {
+        state.mesh.material = ghostingEnabled.value ? state.ghost : state.original;
+      }
     }
   });
+}
+
+function handleMappingUpdate(uuid: string, sensorId: string): void {
+  sensorMappings.value = { ...sensorMappings.value, [uuid]: sensorId };
+  // Save to localStorage
+  localStorage.setItem('iot-sensor-mappings', JSON.stringify(sensorMappings.value));
+  applyInteractionMaterials();
 }
 
 async function handleDrop(event: DragEvent): Promise<void> {
@@ -445,11 +534,34 @@ function fitCameraToModel(model: THREE.Object3D): void {
 
 function animate(): void {
   controls.update();
+  applyInteractionMaterials(); // Continuously update to pulse critical materials
   renderer.render(scene, camera);
   frameId = requestAnimationFrame(animate);
 }
 
 onMounted(() => {
+  // Load sensor mappings
+  const savedMappings = localStorage.getItem('iot-sensor-mappings');
+  if (savedMappings) {
+    try {
+      sensorMappings.value = JSON.parse(savedMappings);
+    } catch {}
+  }
+
+  // Connect WebSocket
+  const host = window.location.hostname === 'localhost' ? 'http://localhost:3000' : window.location.origin;
+  ioSocket.value = io(host);
+
+  ioSocket.value.on('sensors-info', (info: any) => {
+    sensorsInfo.value = info;
+  });
+
+  ioSocket.value.on('sensor-update', (data: any[]) => {
+    const newData = { ...sensorData.value };
+    data.forEach(d => { newData[d.id] = d; });
+    sensorData.value = newData;
+  });
+
   checkApi();
   initThree();
   animate();
@@ -475,6 +587,9 @@ onBeforeUnmount(() => {
     modelManager.disposeAll();
   }
 
+  if (ioSocket.value) {
+    ioSocket.value.disconnect();
+  }
 
   if (renderer) {
     renderer.dispose();
