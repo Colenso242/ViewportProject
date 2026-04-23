@@ -56,6 +56,12 @@
       />
     </div>
 
+    <SensorReadingsPanel
+      v-if="showSensorPanel"
+      :sensor-data="sensorData"
+      @close="showSensorPanel = false"
+    />
+
     <LoadingIndicator :loading-status="loadingStatus" />
   </main>
 </template>
@@ -72,6 +78,7 @@ import Viewport3D from './components/Viewport3D.vue';
 import ObjectInfo from './components/ObjectInfo.vue';
 import PropertiesPanel from './components/PropertiesPanel.vue';
 import SensorOverlay from './components/SensorOverlay.vue';
+import SensorReadingsPanel from './components/SensorReadingsPanel.vue';
 import LoadingIndicator from './components/LoadingIndicator.vue';
 import './App.css';
 
@@ -86,6 +93,7 @@ const apiStatus = ref<string>('checking...');
 const isDragging = ref<boolean>(false);
 const loadingStatus = ref<LoadingStatusType | null>(null);
 const showObjectTree = ref<boolean>(false);
+const showSensorPanel = ref<boolean>(true);
 const ghostingEnabled = ref<boolean>(true);
 const selectedObject = ref<THREE.Object3D | null>(null);
 const hoveredObject = ref<THREE.Object3D | null>(null);
@@ -553,10 +561,12 @@ onMounted(() => {
   ioSocket.value = io(host);
 
   ioSocket.value.on('sensors-info', (info: any) => {
+    console.log('📡 Received sensors-info:', info);
     sensorsInfo.value = info;
   });
 
   ioSocket.value.on('sensor-update', (data: any[]) => {
+    console.log('📊 Received sensor-update:', data);
     const newData = { ...sensorData.value };
     data.forEach(d => { newData[d.id] = d; });
     sensorData.value = newData;
