@@ -34,8 +34,8 @@
         </template>
         <template #overlay>
           <SensorOverlay
-            v-if="camera && currentModel && viewportComponent"
-            :camera="camera"
+            v-if="cameraRef && currentModel && viewportComponent"
+            :camera="cameraRef"
             :viewportEl="(viewportComponent as any)?.viewportElement"
             :currentModel="currentModel"
             :sensorMappings="sensorMappings"
@@ -56,12 +56,6 @@
       />
     </div>
 
-    <SensorReadingsPanel
-      v-if="showSensorPanel"
-      :sensor-data="sensorData"
-      @close="showSensorPanel = false"
-    />
-
     <LoadingIndicator :loading-status="loadingStatus" />
   </main>
 </template>
@@ -78,7 +72,6 @@ import Viewport3D from './components/Viewport3D.vue';
 import ObjectInfo from './components/ObjectInfo.vue';
 import PropertiesPanel from './components/PropertiesPanel.vue';
 import SensorOverlay from './components/SensorOverlay.vue';
-import SensorReadingsPanel from './components/SensorReadingsPanel.vue';
 import LoadingIndicator from './components/LoadingIndicator.vue';
 import './App.css';
 
@@ -87,13 +80,11 @@ interface LoadingStatusType {
   message: string;
 }
 
-const viewport = ref<HTMLElement | null>(null);
 const viewportComponent = ref<ComponentPublicInstance | null>(null);
 const apiStatus = ref<string>('checking...');
 const isDragging = ref<boolean>(false);
 const loadingStatus = ref<LoadingStatusType | null>(null);
 const showObjectTree = ref<boolean>(false);
-const showSensorPanel = ref<boolean>(true);
 const ghostingEnabled = ref<boolean>(true);
 const selectedObject = ref<THREE.Object3D | null>(null);
 const hoveredObject = ref<THREE.Object3D | null>(null);
@@ -108,7 +99,6 @@ let renderer: THREE.WebGLRenderer;
 let cameraRef = shallowRef<THREE.PerspectiveCamera | null>(null);
 let camera: THREE.PerspectiveCamera;
 let scene: THREE.Scene;
-let cube: THREE.Mesh | undefined;
 let controls: OrbitControls;
 let frameId: number;
 let handleResize: (() => void) | undefined;
@@ -183,12 +173,6 @@ function initThree(): void {
   const pointLight = new THREE.PointLight(0xffffff, 0.5);
   pointLight.position.set(-5, 3, -5);
   scene.add(pointLight);
-
-  // default cube
-  // const geometry = new THREE.BoxGeometry(1, 1, 1);
-  // const material = new THREE.MeshStandardMaterial({ color: 0x3b82f6 });
-  // cube = new THREE.Mesh(geometry, material);
-  // scene.add(cube);
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 0, 0);
@@ -585,11 +569,6 @@ onBeforeUnmount(() => {
 
   if (controls) {
     controls.dispose();
-  }
-
-  if (cube) {
-    cube.geometry.dispose();
-    cube.material.dispose();
   }
 
   if (modelManager) {

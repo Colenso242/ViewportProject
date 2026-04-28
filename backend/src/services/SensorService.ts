@@ -2,11 +2,11 @@ import { Collection } from 'mongodb';
 import { SensorReading, SensorData } from '../types';
 
 export class SensorService {
-  constructor(private liveCollection: Collection<SensorReading>) {}
+  constructor(private sensorReadingsCollection: Collection<SensorReading>) {}
 
   async getLatestReadings(): Promise<SensorData[]> {
     try {
-      const latestReadings = await this.liveCollection.aggregate<SensorReading>([
+      const latestReadings = await this.sensorReadingsCollection.aggregate<SensorReading>([
         { $sort: { timestamp: -1 } },
         {
           $group: {
@@ -24,8 +24,8 @@ export class SensorService {
     }
   }
 
-  private _mapToSensorData(readings: SensorReading[]): SensorData[] {
-    return readings.map(reading => ({
+  private _formatReading(reading: SensorReading): SensorData {
+    return {
       id: reading.metadata.sensorId,
       type: reading.metadata.sensorType,
       value: reading.value,
@@ -33,18 +33,14 @@ export class SensorService {
       unit: reading.metadata.unit,
       isCritical: reading.isCritical,
       timestamp: reading.timestamp
-    }));
+    };
+  }
+
+  private _mapToSensorData(readings: SensorReading[]): SensorData[] {
+    return readings.map(reading => this._formatReading(reading));
   }
 
   formatSensorUpdate(document: SensorReading): SensorData {
-    return {
-      id: document.metadata.sensorId,
-      type: document.metadata.sensorType,
-      value: document.value,
-      threshold: document.metadata.threshold,
-      unit: document.metadata.unit,
-      isCritical: document.isCritical,
-      timestamp: document.timestamp
-    };
+    return this._formatReading(document);
   }
 }

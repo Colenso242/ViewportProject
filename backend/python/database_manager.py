@@ -1,15 +1,30 @@
 """Database connection and collection management."""
+import threading
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError, OperationFailure
 from config import DatabaseConfig, TimeSeriesConfig
 
 class DatabaseManager:
     """Manages MongoDB connections and collections."""
+    _instance = None
+    _lock = threading.Lock()
+    _initialized = False
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            with cls._lock:
+                if not cls._instance:
+                    cls._instance = super(DatabaseManager, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
 
     def __init__(self):
+        if self._initialized:
+            return
+            
         self.client = None
         self.db = None
         self.timeseries_collection = None
+        self._initialized = True
 
     def connect(self):
         """Establish connection to MongoDB and initialize the time series collection."""

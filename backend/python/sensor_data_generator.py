@@ -5,8 +5,6 @@ from config import SensorConfig
 
 
 class SensorDataGenerator:
-    """Generates realistic sensor readings with occasional spikes."""
-    
     def __init__(self, sensors=None):
         self.sensors = sensors or SensorConfig.SENSORS
     

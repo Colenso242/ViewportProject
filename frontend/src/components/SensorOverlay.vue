@@ -5,7 +5,7 @@
       :key="item.uuid"
       class="sensor-badge"
       :class="{ 'is-critical': item.data?.isCritical }"
-      :style="{ transform: `translate(-50%, -50%) translate(${item.x}px, ${item.y}px)` }"
+      :style="{ left: `${item.x}px`, top: `${item.y}px`, transform: `translate(-50%, -50%)` }"
       v-show="item.visible"
     >
       <div v-if="item.data?.isCritical" class="warning-icon">⚠</div>
@@ -41,10 +41,23 @@ interface MappedSensor {
 }
 
 const projectedPositions = ref<Record<string, { x: number, y: number, visible: boolean }>>({});
+const meshPositionCache = new Map<string, THREE.Vector3>();
 let animationFrameId = 0;
+let lastUpdateTime = 0;
+const UPDATE_INTERVAL = 1000 / 30; // 30fps position updates
+
+// Clear cache when model changes
+watch(() => props.currentModel, () => {
+  meshPositionCache.clear();
+});
 
 function getMeshWorldPosition(uuid: string): THREE.Vector3 | null {
   if (!props.currentModel) return null;
+
+  // 1. O(1) Lookup: Check cache first to avoid expensive scene traversal and Box3 calculation
+  if (meshPositionCache.has(uuid)) {
+    return meshPositionCache.get(uuid)!.clone();
+  }
 
   let targetNode: THREE.Object3D | null = null;
   props.currentModel.traverse((child) => {
@@ -57,14 +70,11 @@ function getMeshWorldPosition(uuid: string): THREE.Vector3 | null {
 
   const vector = new THREE.Vector3();
 
-  // If it's a mesh, get the bounding box center to look better
-  if ((targetNode as THREE.Mesh).isMesh) {
-    const box = new THREE.Box3().setFromObject(targetNode);
-    box.getCenter(vector);
-  } else {
-    targetNode.getWorldPosition(vector);
-  }
+  const box = new THREE.Box3().setFromObject(targetNode);
+  box.getCenter(vector);
 
+  // Cache the result
+  meshPositionCache.set(uuid, vector.clone());
   return vector;
 }
 
@@ -74,8 +84,21 @@ function updatePositions() {
     return;
   }
 
+  // 2. Throttle updates: Project coordinates at 30 fps instead of 60+ fps
+  const now = performance.now();
+  if (now - lastUpdateTime < UPDATE_INTERVAL) {
+    animationFrameId = requestAnimationFrame(updatePositions);
+    return;
+  }
+  lastUpdateTime = now;
+
   const widthHalf = props.viewportEl.clientWidth / 2;
   const heightHalf = props.viewportEl.clientHeight / 2;
+
+  if (widthHalf === 0 || heightHalf === 0) {
+    animationFrameId = requestAnimationFrame(updatePositions);
+    return;
+  }
 
   const newPositions: Record<string, { x: number, y: number, visible: boolean }> = {};
 

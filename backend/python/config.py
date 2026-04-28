@@ -12,10 +12,7 @@ class DatabaseConfig:
 
 class SensorConfig:
     """Sensor definitions and settings."""
-    SENSORS # Temperature alerts are intentionally triggered at 85°C for the simulator's
-    # 20-100°C operating range to represent a high-temperature condition near the
-    # upper end of normal operation without requiring a full-scale maximum reading.
-    TEMPERATURE_ALERT_THRESHOLD = 85
+    # temp threshold lowered to 50 to facilitate testing
 
     SENSORS = [
         {
@@ -23,7 +20,7 @@ class SensorConfig:
             "type": "temperature",
             "min": 20,
             "max": 100,
-            "threshold": TEMPERATURE_ALERT_THRESHOLD,
+            "threshold": 50,
             "unit": "°C"
         },
         {

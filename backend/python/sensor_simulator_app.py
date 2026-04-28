@@ -15,7 +15,6 @@ class SensorSimulatorApp:
         self.running = False
     
     def initialize(self):
-        """Initialize the application and connect to database."""
         print("\n🚀 Initializing IoT Sensor Simulator...\n")
         
         if not self.db_manager.connect():

@@ -5,10 +5,7 @@ import { SensorReading } from '../types';
 class DatabaseService {
   private client: MongoClient | null = null;
   private db: Db | null = null;
-  private collections: {
-    sensorReadings?: Collection<SensorReading>;
-    sensorReadingsLive?: Collection<SensorReading>;
-  } = {};
+  private sensorReadingsCollection: Collection<SensorReading> | null = null;
 
   async connect(): Promise<boolean> {
     try {
@@ -31,20 +28,16 @@ class DatabaseService {
       throw new Error('Database not initialized');
     }
 
-    this.collections.sensorReadings = this.db.collection<SensorReading>(
+    this.sensorReadingsCollection = this.db.collection<SensorReading>(
       databaseConfig.COLLECTIONS.SENSOR_READINGS
-    );
-    this.collections.sensorReadingsLive = this.db.collection<SensorReading>(
-      databaseConfig.COLLECTIONS.SENSOR_READINGS_LIVE
     );
   }
 
-  getCollection(name: 'sensorReadings' | 'sensorReadingsLive'): Collection<SensorReading> {
-    const collection = this.collections[name];
-    if (!collection) {
-      throw new Error(`Collection ${name} not initialized`);
+  getSensorReadingsCollection(): Collection<SensorReading> {
+    if (!this.sensorReadingsCollection) {
+      throw new Error('Sensor readings collection not initialized');
     }
-    return collection;
+    return this.sensorReadingsCollection;
   }
 
   async disconnect(): Promise<void> {

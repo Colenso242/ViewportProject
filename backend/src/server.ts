@@ -35,10 +35,10 @@ class ServerBootstrap {
   private async _initializeServices(): Promise<void> {
     await DatabaseService.connect();
 
-    const liveCollection = DatabaseService.getCollection('sensorReadingsLive');
-    this.services.sensorService = new SensorService(liveCollection);
+    const sensorReadingsCollection = DatabaseService.getSensorReadingsCollection();
+    this.services.sensorService = new SensorService(sensorReadingsCollection);
     this.services.changeStreamService = new ChangeStreamService(
-      liveCollection,
+      sensorReadingsCollection,
       this.services.sensorService,
       this.io
     );
@@ -68,16 +68,30 @@ class ServerBootstrap {
     const shutdown = async (): Promise<void> => {
       console.log('\nShutting down gracefully...');
 
-      if (this.services.changeStreamService) {
-        await this.services.changeStreamService.stop();
-      }
+      try {
+        if (this.services.changeStreamService) {
+          await this.services.changeStreamService.stop();
+        }
 
-      await DatabaseService.disconnect();
+        await DatabaseService.disconnect();
 
-      this.server.close(() => {
-        console.log('Server closed');
+        await new Promise<void>((resolve, reject) => {
+          this.server.close((error?: Error) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+
+            console.log('Server closed');
+            resolve();
+          });
+        });
+
         process.exit(0);
-      });
+      } catch (error) {
+        console.error('Error during shutdown:', error);
+        process.exit(1);
+      }
     };
 
     process.on('SIGTERM', shutdown);
