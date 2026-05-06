@@ -24,6 +24,28 @@ export class SensorService {
     }
   }
 
+  async getHistoricalData(sensorId: string, limit: number = 1000, timeRangeMinutes?: number): Promise<SensorData[]> {
+    try {
+      const query: any = { "metadata.sensorId": sensorId };
+      if (timeRangeMinutes) {
+        const timeThreshold = new Date(Date.now() - timeRangeMinutes * 60 * 1000);
+        query.timestamp = { $gte: timeThreshold };
+      }
+
+      const history = await this.sensorReadingsCollection
+        .find(query)
+        .sort({ timestamp: -1 })
+        .limit(limit)
+        .toArray();
+
+      // Return in chronological order
+      return this._mapToSensorData(history.reverse());
+    } catch (error) {
+      console.error(`Failed to fetch historical data for ${sensorId}:`, error);
+      throw error;
+    }
+  }
+
   private _formatReading(reading: SensorReading): SensorData {
     return {
       id: reading.metadata.sensorId,

@@ -6,54 +6,79 @@
       :ghosting-enabled="ghostingEnabled"
       @toggle-tree="toggleObjectTree"
       @toggle-ghosting="toggleGhosting"
+      @toggle-overview="showOverview = !showOverview"
     />
 
     <div class="main-container">
-      <ObjectTree
-        v-if="showObjectTree"
-        :object-tree-items="objectTreeItems"
-        :selected-object="selectedObject"
-        @select="selectObject"
-      />
-
-      <Viewport3D
-        ref="viewportComponent"
-        :is-dragging="isDragging"
-        @drag-over="isDragging = true"
-        @drag-leave="isDragging = false"
-        @drop="handleDrop"
-        @click="handleViewportClick"
-        @pointer-move="handleViewportPointerMove"
-        @pointer-leave="handleViewportPointerLeave"
-      >
-        <template #info>
-          <ObjectInfo
+      <div class="viewport-wrapper" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative;">
+        <div class="workspace-row" style="flex: 1; display: flex; overflow: hidden;">
+          <ObjectTree
+            v-if="showObjectTree"
+            :object-tree-items="objectTreeItems"
             :selected-object="selectedObject"
-            :hovered-object="hoveredObject"
+            @select="selectObject"
           />
-        </template>
-        <template #overlay>
-          <SensorOverlay
-            v-if="cameraRef && currentModel && viewportComponent"
-            :camera="cameraRef"
-            :viewportEl="(viewportComponent as any)?.viewportElement"
-            :currentModel="currentModel"
-            :sensorMappings="sensorMappings"
-            :sensorData="sensorData"
-          />
-        </template>
-      </Viewport3D>
 
-      <PropertiesPanel
-        v-if="selectedObject"
-        :selected-object="selectedObject"
-        :sensors-info="sensorsInfo"
-        :sensor-mappings="sensorMappings"
-        :sensor-data="sensorData"
-        @close="deselectObject"
-        @toggle-visibility="selectedObject.visible = !selectedObject.visible"
-        @update-mapping="handleMappingUpdate"
+          <Viewport3D
+            ref="viewportComponent"
+            :is-dragging="isDragging"
+            style="flex: 1; position: relative"
+            @drag-over="isDragging = true"
+            @drag-leave="isDragging = false"
+            @drop="handleDrop"
+            @click="handleViewportClick"
+            @pointer-move="handleViewportPointerMove"
+            @pointer-leave="handleViewportPointerLeave"
+          >
+            <template #info>
+              <ObjectInfo
+                :selected-object="selectedObject"
+                :hovered-object="hoveredObject"
+              />
+            </template>
+            <template #overlay>
+              <SensorOverlay
+                v-if="cameraRef && currentModel && viewportComponent"
+                :camera="cameraRef"
+                :viewportEl="(viewportComponent as any)?.viewportElement"
+                :currentModel="currentModel"
+                :sensorMappings="sensorMappings"
+                :sensorData="sensorData"
+              />
+
+              <!-- Floating Overlay Dashboard -->
+              <div v-if="selectedSensorId && !showOverview" class="floating-dashboard-overlay">
+                <div class="floating-header">
+                  <span>Sensor: {{ selectedSensorId }}</span>
+                  <button @click="deselectObject" class="close-overlay">✕</button>
+                </div>
+                <TimeseriesDashboard
+                  :sensorId="selectedSensorId"
+                  :liveReading="sensorData[selectedSensorId]" />
+              </div>
+            </template>
+          </Viewport3D>
+
+          <PropertiesPanel
+            v-if="selectedObject"
+            :selected-object="selectedObject"
+            :sensors-info="sensorsInfo"
+            :sensor-mappings="sensorMappings"
+            :sensor-data="sensorData"
+            @close="deselectObject"
+            @toggle-visibility="selectedObject.visible = !selectedObject.visible"
+            @update-mapping="handleMappingUpdate"
+          />
+        </div>
+      </div>
+
+      <OverviewPanel
+        v-if="showOverview"
+        @close="showOverview = false"
+        :sensorData="sensorData"
+        :sensorsInfo="sensorsInfo"
       />
+
     </div>
 
     <LoadingIndicator :loading-status="loadingStatus" />
@@ -66,13 +91,15 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { io, Socket } from 'socket.io-client';
 import { ModelManager } from './utils/ModelManager';
-import Toolbar from './components/Toolbar.vue';
-import ObjectTree from './components/ObjectTree.vue';
-import Viewport3D from './components/Viewport3D.vue';
-import ObjectInfo from './components/ObjectInfo.vue';
-import PropertiesPanel from './components/PropertiesPanel.vue';
-import SensorOverlay from './components/SensorOverlay.vue';
-import LoadingIndicator from './components/LoadingIndicator.vue';
+import Toolbar from './components/viewport/Toolbar.vue';
+import ObjectTree from './components/viewport/ObjectTree.vue';
+import Viewport3D from './components/viewport/Viewport3D.vue';
+import ObjectInfo from './components/viewport/ObjectInfo.vue';
+import PropertiesPanel from './components/viewport/PropertiesPanel.vue';
+import SensorOverlay from './components/viewport/SensorOverlay.vue';
+import LoadingIndicator from './components/viewport/LoadingIndicator.vue';
+import TimeseriesDashboard from './components/analytics/TimeseriesDashboard.vue';
+import OverviewPanel from './components/analytics/OverviewPanel.vue';
 import './App.css';
 
 interface LoadingStatusType {
@@ -85,9 +112,17 @@ const apiStatus = ref<string>('checking...');
 const isDragging = ref<boolean>(false);
 const loadingStatus = ref<LoadingStatusType | null>(null);
 const showObjectTree = ref<boolean>(false);
+const showOverview = ref<boolean>(false);
 const ghostingEnabled = ref<boolean>(true);
 const selectedObject = ref<THREE.Object3D | null>(null);
 const hoveredObject = ref<THREE.Object3D | null>(null);
+
+const selectedSensorId = computed(() => {
+  if (selectedObject.value) {
+    return sensorMappings.value[selectedObject.value.uuid] || null;
+  }
+  return null;
+});
 
 // IoT Data
 const ioSocket = ref<Socket | null>(null);
@@ -586,3 +621,57 @@ onBeforeUnmount(() => {
 });
 
 </script>
+
+<style>
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.main-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.viewport-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  position: relative;
+}
+
+.workspace-row {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.floating-dashboard-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 16px;
+  border-top: 1px solid #333;
+  z-index: 10;
+}
+
+.floating-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.close-overlay {
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 18px;
+}
+</style>

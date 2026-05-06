@@ -2,6 +2,9 @@
   <header class="toolbar">
     <h1>3D Model Viewer</h1>
     <div class="toolbar-controls">
+      <button @click="$emit('toggle-overview')" class="toolbar-btn">
+        📊 Overview
+      </button>
       <button @click="$emit('toggle-tree')" class="toolbar-btn">
         {{ showObjectTree ? '✕' : '☰' }} Objects
       </button>
@@ -23,6 +26,7 @@ defineProps<{
 defineEmits<{
   'toggle-tree': [];
   'toggle-ghosting': [];
+  'toggle-overview': [];
 }>();
 </script>
 
@@ -72,4 +76,3 @@ defineEmits<{
   background: #334155;
 }
 </style>
-

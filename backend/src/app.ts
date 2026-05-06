@@ -2,6 +2,7 @@ import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { serverConfig } from './config/server';
+import {SensorService} from "./services/SensorService";
 
 export class App {
   private app: Application;
@@ -9,7 +10,10 @@ export class App {
   constructor() {
     this.app = express();
     this._setupMiddleware();
-    this._setupRoutes();
+  }
+
+  setSensorService(sensorService:SensorService) {
+    this._setupRoutes(sensorService);
   }
 
   private _setupMiddleware(): void {
@@ -19,8 +23,24 @@ export class App {
     }));
   }
 
-  private _setupRoutes(): void {
+  private _setupRoutes(sensorService: SensorService): void {
     this.app.get('/api/health', this._healthCheck.bind(this));
+
+    if (sensorService) {
+      this.app.get('/api/sensors/:id/history', async (req: Request, res: Response) => {
+        try {
+          const sensorId = req.params.id;
+          const limit = req.query.limit ? parseInt(req.query.limit as string) : 1000;
+          const timeRangeMinutes = req.query.timeRangeMinutes ? parseInt(req.query.timeRangeMinutes as string) : undefined;
+
+          const history = await sensorService.getHistoricalData(sensorId, limit, timeRangeMinutes);
+          res.json(history);
+        } catch (error) {
+          console.error(`Error fetching history for ${req.params.id}:`, error);
+          res.status(500).json({ error: 'Internal Server Error' });
+        }
+      });
+    }
 
     if (serverConfig.NODE_ENV === 'production') {
       this._setupProductionRoutes();

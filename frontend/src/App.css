@@ -17,9 +17,54 @@ body {
 }
 
 .main-container {
-  display: flex;
   flex: 1;
+  display: flex;
+  position: relative;
   overflow: hidden;
+  flex-direction: column;
 }
 
+.bottom-dashboard {
+  height: 250px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #0f172a;
+  z-index: 10;
+}
 
+.floating-dashboard-overlay {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  width: 450px;
+  height: 300px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+}
+
+.floating-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  font-weight: bold;
+}
+
+.close-overlay {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  color: #94a3b8;
+  cursor: pointer;
+}
+.close-overlay:hover {
+  color: #ef4444;
+}

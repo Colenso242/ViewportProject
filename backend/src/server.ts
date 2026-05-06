@@ -37,6 +37,10 @@ class ServerBootstrap {
 
     const sensorReadingsCollection = DatabaseService.getSensorReadingsCollection();
     this.services.sensorService = new SensorService(sensorReadingsCollection);
+
+    // Inject service to App for routes setup
+    this.application.setSensorService(this.services.sensorService);
+
     this.services.changeStreamService = new ChangeStreamService(
       sensorReadingsCollection,
       this.services.sensorService,
