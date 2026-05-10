@@ -37,6 +37,27 @@
           </div>
         </div>
 
+        <!-- Gauge Widget -->
+        <div class="widget gauge-widget">
+          <h3>Sensor Gauge</h3>
+          <div class="widget-body">
+            <select v-model="selectedGaugeSensor" class="widget-dropdown">
+              <option v-for="sensor in sensorsInfo" :key="sensor.id" :value="sensor.id">
+                {{ sensor.id }}
+              </option>
+            </select>
+            <div class="gauge-wrapper" v-if="selectedGaugeSensor">
+              <GaugeWidget
+                :sensorId="selectedGaugeSensor"
+                :liveReading="sensorData[selectedGaugeSensor]"
+                :min="getSensorConfig(selectedGaugeSensor).min || 0"
+                :max="getSensorConfig(selectedGaugeSensor).max || 100"
+                :threshold="getSensorConfig(selectedGaugeSensor).threshold || 80"
+              />
+            </div>
+          </div>
+        </div>
+
         <!-- Placeholder Widget -->
         <div class="widget placeholder-widget">
           <h3>System Alerts</h3>
@@ -54,6 +75,7 @@
 import { ref, watch, onMounted } from 'vue';
 import TimeseriesDashboard from './TimeseriesDashboard.vue';
 import RawDataWidget from './RawDataWidget.vue';
+import GaugeWidget from './GaugeWidget.vue';
 
 const props = defineProps<{
   sensorData: Record<string, any>;
@@ -65,10 +87,18 @@ defineEmits<{
 }>();
 
 const selectedWidgetSensor = ref('');
+const selectedGaugeSensor = ref('');
+
+const getSensorConfig = (sensorId: string) => {
+  return props.sensorsInfo.find((s: any) => s.id === sensorId) || {};
+};
 
 watch(() => props.sensorsInfo, (info) => {
   if (info && info.length > 0 && !selectedWidgetSensor.value) {
     selectedWidgetSensor.value = info[0].id;
+  }
+  if (info && info.length > 0 && !selectedGaugeSensor.value) {
+    selectedGaugeSensor.value = info[0].id;
   }
 }, { immediate: true });
 
@@ -178,6 +208,15 @@ watch(() => props.sensorsInfo, (info) => {
   flex: 1;
   position: relative;
   min-height: 0;
+}
+
+.gauge-wrapper {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .center-content {

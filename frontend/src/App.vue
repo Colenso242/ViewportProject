@@ -446,17 +446,22 @@ function applyInteractionMaterials(): void {
   meshMaterialStates.forEach((state) => {
     const sensorId = sensorMappings.value[state.mesh.uuid];
     let isCritical = false;
+    let isWarning = false;
 
-    if (sensorId && sensorData.value[sensorId]?.isCritical) {
-      isCritical = true;
+    if (sensorId && sensorData.value[sensorId]) {
+      const sensorReading = sensorData.value[sensorId];
+      isCritical = sensorReading.isCritical;
+      isWarning = sensorReading.isWarning;
 
       // Update the critical material's emissive intensity dynamically for pulsing
-      const crits = Array.isArray(state.critical) ? state.critical : [state.critical];
-      crits.forEach(m => {
-        if ((m as any).emissiveIntensity !== undefined) {
-          (m as any).emissiveIntensity = 0.5 + pulseIntensity * 0.5; // pulses between 0.5 and 1.0
-        }
-      });
+      if (isCritical) {
+        const crits = Array.isArray(state.critical) ? state.critical : [state.critical];
+        crits.forEach(m => {
+          if ((m as any).emissiveIntensity !== undefined) {
+            (m as any).emissiveIntensity = 0.5 + pulseIntensity * 0.5; // pulses between 0.5 and 1.0
+          }
+        });
+      }
     }
 
     if (focusedMesh && state.mesh.uuid === focusedMesh.uuid) {

@@ -54,6 +54,7 @@ export class SensorService {
       threshold: reading.metadata.threshold,
       unit: reading.metadata.unit,
       isCritical: reading.isCritical,
+      isWarning: reading.isWarning,
       timestamp: reading.timestamp
     };
   }

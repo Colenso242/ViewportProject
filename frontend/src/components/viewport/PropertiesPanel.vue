@@ -59,13 +59,19 @@
         <div v-if="linkedSensorData" class="sensor-live-data">
           <div class="prop-row">
             <span class="prop-label">Live Value</span>
-            <span class="prop-value" :style="{ color: linkedSensorData.isCritical ? '#ef4444' : '#10b981' }">
+            <span class="prop-value" :style="getSensorValueColor()">
               {{ linkedSensorData.value }} {{ linkedSensorData.unit }}
             </span>
           </div>
           <div class="prop-row">
             <span class="prop-label">Threshold</span>
             <span class="prop-value">{{ linkedSensorData.threshold }} {{ linkedSensorData.unit }}</span>
+          </div>
+          <div class="prop-row">
+            <span class="prop-label">Status</span>
+            <span class="prop-value" :class="getSensorStatusClass()">
+              {{ getSensorStatusText() }}
+            </span>
           </div>
         </div>
       </div>
@@ -128,6 +134,27 @@ const linkedSensorData = computed(() => {
   if (!linkedSensor.value || !props.sensorData) return null;
   return props.sensorData[linkedSensor.value];
 });
+
+function getSensorValueColor() {
+  if (!linkedSensorData.value) return {};
+  if (linkedSensorData.value.isCritical) return { color: '#ef4444' };
+  if (linkedSensorData.value.isWarning) return { color: '#fbbf24' };
+  return { color: '#10b981' };
+}
+
+function getSensorStatusClass() {
+  if (!linkedSensorData.value) return '';
+  if (linkedSensorData.value.isCritical) return 'sensor-critical';
+  if (linkedSensorData.value.isWarning) return 'sensor-warning';
+  return 'sensor-ok';
+}
+
+function getSensorStatusText() {
+  if (!linkedSensorData.value) return '';
+  if (linkedSensorData.value.isCritical) return '🔴 CRITICAL';
+  if (linkedSensorData.value.isWarning) return '🟡 WARNING';
+  return '🟢 OK';
+}
 </script>
 
 <style scoped>
@@ -259,6 +286,18 @@ const linkedSensorData = computed(() => {
   padding: 0.5rem;
   border-radius: 0.25rem;
   border-left: 2px solid #3b82f6;
+}
+
+.sensor-ok {
+  color: #10b981 !important;
+}
+
+.sensor-warning {
+  color: #fbbf24 !important;
+}
+
+.sensor-critical {
+  color: #ef4444 !important;
 }
 
 .transform-grid div:not(.transform-lbl) {

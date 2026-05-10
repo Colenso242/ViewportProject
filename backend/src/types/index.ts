@@ -11,6 +11,7 @@ export interface SensorReading {
   metadata: SensorMetadata;
   value: number;
   isCritical: boolean;
+  isWarning?: boolean;
 }
 
 export interface SensorData {
@@ -20,6 +21,7 @@ export interface SensorData {
   threshold: number;
   unit: string;
   isCritical: boolean;
+  isWarning?: boolean;
   timestamp?: Date;
 }
 

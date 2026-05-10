@@ -19,8 +19,17 @@ class SensorDataGenerator:
             Dictionary containing the sensor reading document
         """
         value = self._calculate_value(sensor)
-        is_critical = value >= sensor["threshold"]
-        
+
+        # Calculate warning and critical thresholds
+        range_size = sensor["max"] - sensor["min"]
+        threshold = sensor["threshold"]
+        # Warning zone: 40% between threshold and max
+        warning_threshold = threshold + (sensor["max"] - threshold) * 0.4
+
+        # Status determination: critical if above warning threshold
+        is_critical = value > warning_threshold
+        is_warning = threshold <= value <= warning_threshold
+
         return {
             "timestamp": datetime.utcnow(),
             "metadata": {
@@ -30,7 +39,8 @@ class SensorDataGenerator:
                 "threshold": sensor["threshold"]
             },
             "value": value,
-            "isCritical": is_critical
+            "isCritical": is_critical,
+            "isWarning": is_warning
         }
     
     def _calculate_value(self, sensor):

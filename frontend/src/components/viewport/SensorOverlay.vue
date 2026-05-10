@@ -4,11 +4,12 @@
       v-for="item in mappedSensors"
       :key="item.uuid"
       class="sensor-badge"
-      :class="{ 'is-critical': item.data?.isCritical }"
+      :class="{ 'is-critical': item.data?.isCritical, 'is-warning': item.data?.isWarning }"
       :style="{ left: `${item.x}px`, top: `${item.y}px`, transform: `translate(-50%, -50%)` }"
       v-show="item.visible"
     >
-      <div v-if="item.data?.isCritical" class="warning-icon">⚠</div>
+      <div v-if="item.data?.isCritical" class="warning-icon">🔴</div>
+      <div v-else-if="item.data?.isWarning" class="warning-icon">🟡</div>
       <div class="sensor-info">
         <span class="sensor-id">{{ item.sensorId }}</span>
         <span v-if="item.data" class="sensor-val">
@@ -190,13 +191,25 @@ const mappedSensors = computed<MappedSensor[]>(() => {
 .sensor-badge.is-critical {
   border-color: #ef4444;
   background: rgba(127, 29, 29, 0.9);
-  animation: pulse 1.5s infinite;
+  animation: pulse-critical 1.5s infinite;
 }
 
-@keyframes pulse {
+.sensor-badge.is-warning {
+  border-color: #fbbf24;
+  background: rgba(120, 53, 15, 0.9);
+  animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-critical {
   0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
   70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
   100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+@keyframes pulse-warning {
+  0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.3); }
+  70% { box-shadow: 0 0 0 4px rgba(251, 191, 36, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
 }
 
 .warning-icon {

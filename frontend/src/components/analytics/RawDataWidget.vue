@@ -27,7 +27,7 @@
         </div>
         <div class="data-row">
           <span class="label">Value:</span>
-          <span class="value" :class="{ 'critical': selectedSensorData.isCritical }">
+          <span class="value" :class="{ 'warning': selectedSensorData.isWarning, 'critical': selectedSensorData.isCritical }">
             {{ selectedSensorData.value }} {{ selectedSensorData.unit }}
           </span>
         </div>
@@ -38,8 +38,9 @@
         <div class="data-row">
           <span class="label">Status:</span>
           <span class="value">
-            <span v-if="selectedSensorData.isCritical" class="badge critical">CRITICAL</span>
-            <span v-else class="badge ok">OK</span>
+            <span v-if="selectedSensorData.isCritical" class="badge critical">🔴 CRITICAL</span>
+            <span v-else-if="selectedSensorData.isWarning" class="badge warning">🟡 WARNING</span>
+            <span v-else class="badge ok">🟢 OK</span>
           </span>
         </div>
       </div>
@@ -136,6 +137,10 @@ const selectedSensorData = computed(() => {
   color: #ef4444;
 }
 
+.value.warning {
+  color: #fbbf24;
+}
+
 .badge {
   padding: 0.2rem 0.5rem;
   border-radius: 9999px;
@@ -146,6 +151,11 @@ const selectedSensorData = computed(() => {
 .badge.ok {
   background: rgba(16, 185, 129, 0.2);
   color: #10b981;
+}
+
+.badge.warning {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
 }
 
 .badge.critical {
