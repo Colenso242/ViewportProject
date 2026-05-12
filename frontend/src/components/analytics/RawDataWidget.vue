@@ -50,16 +50,16 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import { storeToRefs } from 'pinia';
+import { useSensorStore } from '../../stores/useSensorStore';
 
-const props = defineProps<{
-  sensorData: Record<string, any>;
-  sensorsInfo: any[];
-}>();
+const sensorStore = useSensorStore();
+const { sensorData, sensorsInfo } = storeToRefs(sensorStore);
 
 const selectedSensor = ref('');
 
 // Auto-select first available sensor
-watch(() => props.sensorsInfo, (info) => {
+watch(sensorsInfo, (info) => {
   if (info && info.length > 0 && !selectedSensor.value) {
     selectedSensor.value = info[0].id;
   }
@@ -67,7 +67,7 @@ watch(() => props.sensorsInfo, (info) => {
 
 const selectedSensorData = computed(() => {
   if (!selectedSensor.value) return null;
-  return props.sensorData[selectedSensor.value] || null;
+  return sensorData.value[selectedSensor.value] || null;
 });
 </script>
 

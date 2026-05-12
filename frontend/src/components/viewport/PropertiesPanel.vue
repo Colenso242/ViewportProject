@@ -6,154 +6,34 @@
     </div>
 
     <div class="panel-content">
-      <div class="prop-group header-group">
-        <h3>{{ selectedObject.name || 'Unnamed Object' }}</h3>
-        <p class="prop-row">
-          <span class="prop-label">Type</span>
-          <span class="prop-value">{{ selectedObject.type }}</span>
-        </p>
-        <p v-if="selectedObject.uuid" class="prop-row">
-          <span class="prop-label">UUID</span>
-          <span class="prop-value uuid-val" :title="selectedObject.uuid">{{ selectedObject.uuid.split('-')[0] }}...</span>
-        </p>
-      </div>
-
-      <div class="prop-group">
-        <label class="toggle-row">
-          <span class="prop-label">Visible</span>
-          <input
-            type="checkbox"
-            :checked="selectedObject.visible"
-            @change="$emit('toggle-visibility')"
-          />
-        </label>
-      </div>
-
-      <div class="prop-group" v-if="(selectedObject as any).geometry">
-        <h3>Geometry</h3>
-        <p class="prop-row">
-          <span class="prop-label">Type</span>
-          <span class="prop-value">{{ (selectedObject as any).geometry.type || 'Unknown' }}</span>
-        </p>
-      </div>
-
-      <div class="prop-group" v-if="(selectedObject as any).material">
-        <h3>Material</h3>
-        <p class="prop-row">
-          <span class="prop-label">Type</span>
-          <span class="prop-value">
-            {{ Array.isArray((selectedObject as any).material) ? 'Multiple Materials' : (selectedObject as any).material.type }}
-          </span>
-        </p>
-      </div>
-
-      <div class="prop-group">
-        <h3>IoT Sensor Link</h3>
-        <select v-model="linkedSensor" @change="updateLink" class="sensor-select">
-          <option value="">-- No Sensor --</option>
-          <option v-for="sensor in sensorsInfo" :key="sensor.id" :value="sensor.id">
-            {{ sensor.id }} ({{ sensor.type }})
-          </option>
-        </select>
-
-        <div v-if="linkedSensorData" class="sensor-live-data">
-          <div class="prop-row">
-            <span class="prop-label">Live Value</span>
-            <span class="prop-value" :style="getSensorValueColor()">
-              {{ linkedSensorData.value }} {{ linkedSensorData.unit }}
-            </span>
-          </div>
-          <div class="prop-row">
-            <span class="prop-label">Threshold</span>
-            <span class="prop-value">{{ linkedSensorData.threshold }} {{ linkedSensorData.unit }}</span>
-          </div>
-          <div class="prop-row">
-            <span class="prop-label">Status</span>
-            <span class="prop-value" :class="getSensorStatusClass()">
-              {{ getSensorStatusText() }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div class="prop-group">
-        <h3>Transform</h3>
-        <div class="transform-grid">
-          <div class="transform-lbl">Position</div>
-          <div>{{ selectedObject.position.x.toFixed(2) }}</div>
-          <div>{{ selectedObject.position.y.toFixed(2) }}</div>
-          <div>{{ selectedObject.position.z.toFixed(2) }}</div>
-
-          <div class="transform-lbl">Rotation</div>
-          <div>{{ selectedObject.rotation.x.toFixed(2) }}</div>
-          <div>{{ selectedObject.rotation.y.toFixed(2) }}</div>
-          <div>{{ selectedObject.rotation.z.toFixed(2) }}</div>
-
-          <div class="transform-lbl">Scale</div>
-          <div>{{ selectedObject.scale.x.toFixed(2) }}</div>
-          <div>{{ selectedObject.scale.y.toFixed(2) }}</div>
-          <div>{{ selectedObject.scale.z.toFixed(2) }}</div>
-        </div>
-      </div>
+      <ObjectSummarySection
+        :selected-object="selectedObject"
+        @toggle-visibility="toggleVisibility"
+      />
+      <ObjectDetailsSection :selected-object="selectedObject" />
+      <SensorLinkSection :selected-object="selectedObject" />
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
 import * as THREE from 'three';
-import { ref, watch, computed } from 'vue';
+import ObjectSummarySection from './properties/ObjectSummarySection.vue';
+import ObjectDetailsSection from './properties/ObjectDetailsSection.vue';
+import SensorLinkSection from './properties/SensorLinkSection.vue';
 
 const props = defineProps<{
   selectedObject: THREE.Object3D | null;
-  sensorsInfo?: any[];
-  sensorMappings?: Record<string, string>;
-  sensorData?: Record<string, any>;
 }>();
 
-const emit = defineEmits<{
-  'close': [];
-  'toggle-visibility': [];
-  'update-mapping': [uuid: string, sensorId: string];
+defineEmits<{
+  close: [];
 }>();
 
-const linkedSensor = ref('');
-
-watch(() => props.selectedObject, (obj) => {
-  if (obj && props.sensorMappings) {
-    linkedSensor.value = props.sensorMappings[obj.uuid] || '';
-  }
-}, { immediate: true });
-
-function updateLink() {
+function toggleVisibility() {
   if (props.selectedObject) {
-    emit('update-mapping', props.selectedObject.uuid, linkedSensor.value);
+    props.selectedObject.visible = !props.selectedObject.visible;
   }
-}
-
-const linkedSensorData = computed(() => {
-  if (!linkedSensor.value || !props.sensorData) return null;
-  return props.sensorData[linkedSensor.value];
-});
-
-function getSensorValueColor() {
-  if (!linkedSensorData.value) return {};
-  if (linkedSensorData.value.isCritical) return { color: '#ef4444' };
-  if (linkedSensorData.value.isWarning) return { color: '#fbbf24' };
-  return { color: '#10b981' };
-}
-
-function getSensorStatusClass() {
-  if (!linkedSensorData.value) return '';
-  if (linkedSensorData.value.isCritical) return 'sensor-critical';
-  if (linkedSensorData.value.isWarning) return 'sensor-warning';
-  return 'sensor-ok';
-}
-
-function getSensorStatusText() {
-  if (!linkedSensorData.value) return '';
-  if (linkedSensorData.value.isCritical) return '🔴 CRITICAL';
-  if (linkedSensorData.value.isWarning) return '🟡 WARNING';
-  return '🟢 OK';
 }
 </script>
 
@@ -206,106 +86,5 @@ function getSensorStatusText() {
   flex: 1;
   overflow-y: auto;
   padding: 0;
-}
-
-.prop-group {
-  padding: 1rem;
-  border-bottom: 1px solid #334155;
-}
-
-.header-group h3 {
-  margin: 0 0 0.75rem 0;
-  font-size: 1.1rem;
-  color: #60a5fa;
-  word-break: break-all;
-}
-
-.prop-group h3 {
-  margin: 0 0 0.75rem 0;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  color: #94a3b8;
-  letter-spacing: 0.05em;
-}
-
-.prop-row {
-  display: flex;
-  justify-content: space-between;
-  margin: 0.25rem 0;
-  font-size: 0.875rem;
-}
-
-.toggle-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.prop-label {
-  color: #94a3b8;
-}
-
-.prop-value {
-  color: #e2e8f0;
-  font-family: inherit;
-}
-
-.uuid-val {
-  font-family: monospace;
-  cursor: help;
-}
-
-.transform-grid {
-  display: grid;
-  grid-template-columns: 3fr 2fr 2fr 2fr;
-  gap: 0.25rem;
-  font-size: 0.875rem;
-}
-
-.transform-lbl {
-  color: #94a3b8;
-  font-size: 0.8rem;
-  display: flex;
-  align-items: center;
-}
-
-.sensor-select {
-  width: 100%;
-  padding: 0.5rem;
-  background: #0f172a;
-  border: 1px solid #334155;
-  color: #e2e8f0;
-  border-radius: 0.25rem;
-  margin-bottom: 0.75rem;
-}
-
-.sensor-live-data {
-  background: rgba(15, 23, 42, 0.5);
-  padding: 0.5rem;
-  border-radius: 0.25rem;
-  border-left: 2px solid #3b82f6;
-}
-
-.sensor-ok {
-  color: #10b981 !important;
-}
-
-.sensor-warning {
-  color: #fbbf24 !important;
-}
-
-.sensor-critical {
-  color: #ef4444 !important;
-}
-
-.transform-grid div:not(.transform-lbl) {
-  background: #0f172a;
-  padding: 0.25rem;
-  text-align: right;
-  border-radius: 0.25rem;
-  font-family: monospace;
-  color: #e2e8f0;
 }
 </style>

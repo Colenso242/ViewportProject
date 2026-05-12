@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
 import { GaugeChart } from 'echarts/charts';
 import { TitleComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
+import { useSensorStore } from '../../stores/useSensorStore';
 
 use([
   TitleComponent,
@@ -18,42 +20,29 @@ const props = defineProps({
   sensorId: {
     type: String,
     required: true
-  },
-  liveReading: {
-    type: Object,
-    default: null
-  },
-  min: {
-    type: Number,
-    default: 0
-  },
-  max: {
-    type: Number,
-    default: 100
-  },
-  threshold: {
-    type: Number,
-    default: 80
   }
 });
+
+const sensorStore = useSensorStore();
+const { sensorData, sensorsInfo } = storeToRefs(sensorStore);
 
 const chartOption = ref({});
 const currentValue = ref(0);
 
+const liveReading = computed(() => sensorData.value[props.sensorId] || null);
+const sensorConfig = computed(() => sensorsInfo.value.find((sensor) => sensor.id === props.sensorId) || null);
+
 const updateGaugeOption = () => {
-  const value = props.liveReading?.value ?? currentValue.value;
-  const isCritical = props.liveReading?.isCritical ?? false;
+  const config = sensorConfig.value;
+  const min = config?.min ?? 0;
+  const max = config?.max ?? 100;
+  const threshold = config?.threshold ?? 80;
+  const value = liveReading.value?.value ?? currentValue.value;
+  const isCritical = liveReading.value?.isCritical ?? false;
 
-  // Normalize threshold position relative to min/max range
-  const range = props.max - props.min;
-  const thresholdPos = (props.threshold - props.min) / range;
-  const warningPos = Math.min(1, thresholdPos + (1 - thresholdPos) * 0.4); // Warning at 40% between threshold and max
-
-  // Color based on value and critical state
-  let color = ['#22c55e', '#fbbf24', '#ef4444']; // green, yellow, red
-  if (isCritical) {
-    color = ['#ef4444', '#ef4444', '#7f1d1d']; // red critical
-  }
+  const range = Math.max(max - min, 1);
+  const thresholdPos = Math.min(1, Math.max(0, (threshold - min) / range));
+  const warningPos = Math.min(1, thresholdPos + (1 - thresholdPos) * 0.4);
 
   chartOption.value = {
     title: {
@@ -74,8 +63,8 @@ const updateGaugeOption = () => {
         type: 'gauge',
         startAngle: 225,
         endAngle: -45,
-        min: props.min,
-        max: props.max,
+        min,
+        max,
         splitNumber: 10,
         axisLine: {
           lineStyle: {
@@ -93,10 +82,8 @@ const updateGaugeOption = () => {
           }
         },
         axisLabel: {
-          labelStyle: {
-            color: '#94a3b8',
-            fontSize: 10
-          }
+          color: '#94a3b8',
+          fontSize: 10
         },
         splitLine: {
           lineStyle: {
@@ -117,16 +104,11 @@ const updateGaugeOption = () => {
   };
 };
 
-watch(() => props.liveReading, () => {
-  if (props.liveReading?.value !== undefined) {
-    currentValue.value = props.liveReading.value;
-  }
+watch([liveReading, sensorConfig], () => {
+  currentValue.value = liveReading.value?.value ?? 0;
   updateGaugeOption();
-}, { deep: true });
+}, { deep: true, immediate: true });
 
-onMounted(() => {
-  updateGaugeOption();
-});
 </script>
 
 <template>

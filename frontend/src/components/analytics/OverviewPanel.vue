@@ -19,8 +19,7 @@
             </select>
             <div class="chart-wrapper" v-if="selectedWidgetSensor">
               <TimeseriesDashboard
-                :sensorId="selectedWidgetSensor"
-                :liveReading="sensorData[selectedWidgetSensor]" />
+                :sensorId="selectedWidgetSensor" />
             </div>
             <div v-else class="empty-state">No sensors available.</div>
           </div>
@@ -30,10 +29,7 @@
         <div class="widget raw-data-widget">
           <h3>Live Raw Data</h3>
           <div class="widget-body">
-            <RawDataWidget
-              :sensorData="sensorData"
-              :sensorsInfo="sensorsInfo"
-            />
+            <RawDataWidget />
           </div>
         </div>
 
@@ -49,10 +45,6 @@
             <div class="gauge-wrapper" v-if="selectedGaugeSensor">
               <GaugeWidget
                 :sensorId="selectedGaugeSensor"
-                :liveReading="sensorData[selectedGaugeSensor]"
-                :min="getSensorConfig(selectedGaugeSensor).min || 0"
-                :max="getSensorConfig(selectedGaugeSensor).max || 100"
-                :threshold="getSensorConfig(selectedGaugeSensor).threshold || 80"
               />
             </div>
           </div>
@@ -72,15 +64,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import TimeseriesDashboard from './TimeseriesDashboard.vue';
 import RawDataWidget from './RawDataWidget.vue';
 import GaugeWidget from './GaugeWidget.vue';
+import { useSensorStore } from '../../stores/useSensorStore';
 
-const props = defineProps<{
-  sensorData: Record<string, any>;
-  sensorsInfo: any[];
-}>();
+const sensorStore = useSensorStore();
+const { sensorsInfo } = storeToRefs(sensorStore);
 
 defineEmits<{
   'close': [];
@@ -89,11 +81,7 @@ defineEmits<{
 const selectedWidgetSensor = ref('');
 const selectedGaugeSensor = ref('');
 
-const getSensorConfig = (sensorId: string) => {
-  return props.sensorsInfo.find((s: any) => s.id === sensorId) || {};
-};
-
-watch(() => props.sensorsInfo, (info) => {
+watch(sensorsInfo, (info) => {
   if (info && info.length > 0 && !selectedWidgetSensor.value) {
     selectedWidgetSensor.value = info[0].id;
   }

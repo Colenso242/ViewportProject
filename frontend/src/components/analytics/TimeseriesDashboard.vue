@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
 import { LineChart } from 'echarts/charts';
 import { TitleComponent, TooltipComponent, GridComponent, LegendComponent, DataZoomComponent, MarkLineComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
+import { ApiService } from '../../services/ApiService';
+import { useSensorStore } from '../../stores/useSensorStore';
 
 use([
   TitleComponent,
@@ -21,32 +24,29 @@ const props = defineProps({
   sensorId: {
     type: String,
     required: true
-  },
-  liveReading: {
-    type: Object,
-    default: null
   }
 });
+
+const sensorStore = useSensorStore();
+const { sensorData } = storeToRefs(sensorStore);
 
 const chartData = ref<any[]>([]);
 const chartOption = ref({});
 const isLoading = ref(true);
+const liveReading = computed(() => sensorData.value[props.sensorId] || null);
 
 const fetchHistoricalData = async () => {
   isLoading.value = true;
   try {
-    const response = await fetch(`http://localhost:3000/api/sensors/${props.sensorId}/history?limit=500&timeRangeMinutes=60`);
-    if (response.ok) {
-      const data = await response.json();
-      chartData.value = data.map((d: any) => ({
-        name: new Date(d.timestamp).getTime(),
-        value: [
-          new Date(d.timestamp).getTime(),
-          d.value
-        ]
-      }));
-      updateChartOptions();
-    }
+    const data = await ApiService.fetchHistory(props.sensorId, 500, 60);
+    chartData.value = data.map((d: any) => ({
+      name: new Date(d.timestamp).getTime(),
+      value: [
+        new Date(d.timestamp).getTime(),
+        d.value
+      ]
+    }));
+    updateChartOptions();
   } catch (error) {
     console.error("Failed to load historical data", error);
   } finally {
@@ -83,8 +83,8 @@ const updateChartOptions = () => {
 };
 
 // Handle live updates
-watch(() => props.liveReading, (newReading) => {
-  if (newReading && newReading.id === props.sensorId) {
+watch(liveReading, (newReading) => {
+  if (newReading) {
     chartData.value.push({
       name: new Date(newReading.timestamp).getTime(),
       value: [new Date(newReading.timestamp).getTime(), newReading.value]
@@ -98,9 +98,7 @@ watch(() => props.liveReading, (newReading) => {
   }
 }, { deep: true });
 
-onMounted(() => {
-  fetchHistoricalData();
-});
+watch(() => props.sensorId, fetchHistoricalData, { immediate: true });
 </script>
 
 <template>

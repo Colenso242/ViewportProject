@@ -6,7 +6,7 @@
       :ghosting-enabled="ghostingEnabled"
       @toggle-tree="toggleObjectTree"
       @toggle-ghosting="toggleGhosting"
-      @toggle-overview="showOverview = !showOverview"
+      @toggle-overview="toggleOverview"
     />
 
     <div class="main-container">
@@ -52,9 +52,7 @@
                   <span>Sensor: {{ selectedSensorId }}</span>
                   <button @click="deselectObject" class="close-overlay">✕</button>
                 </div>
-                <TimeseriesDashboard
-                  :sensorId="selectedSensorId"
-                  :liveReading="sensorData[selectedSensorId]" />
+                <TimeseriesDashboard :sensorId="selectedSensorId" />
               </div>
             </template>
           </Viewport3D>
@@ -62,12 +60,7 @@
           <PropertiesPanel
             v-if="selectedObject"
             :selected-object="selectedObject"
-            :sensors-info="sensorsInfo"
-            :sensor-mappings="sensorMappings"
-            :sensor-data="sensorData"
             @close="deselectObject"
-            @toggle-visibility="selectedObject.visible = !selectedObject.visible"
-            @update-mapping="handleMappingUpdate"
           />
         </div>
       </div>
@@ -75,8 +68,6 @@
       <OverviewPanel
         v-if="showOverview"
         @close="showOverview = false"
-        :sensorData="sensorData"
-        :sensorsInfo="sensorsInfo"
       />
 
     </div>
@@ -86,11 +77,8 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, shallowRef, computed, ComponentPublicInstance } from 'vue';
+import { onBeforeUnmount, onMounted, ref, computed, ComponentPublicInstance } from 'vue';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { io, Socket } from 'socket.io-client';
-import { ModelManager } from './utils/ModelManager';
 import Toolbar from './components/viewport/Toolbar.vue';
 import ObjectTree from './components/viewport/ObjectTree.vue';
 import Viewport3D from './components/viewport/Viewport3D.vue';
@@ -102,20 +90,36 @@ import TimeseriesDashboard from './components/analytics/TimeseriesDashboard.vue'
 import OverviewPanel from './components/analytics/OverviewPanel.vue';
 import './App.css';
 
-interface LoadingStatusType {
-  type: 'loading' | 'success' | 'error';
-  message: string;
-}
+import { useSensorStore } from './stores/useSensorStore';
+import { useSceneStore } from './stores/useSceneStore';
+import { useThreeScene } from './composables/useThreeScene';
+import { useRaycaster } from './composables/useRaycaster';
+import { useMaterialManager } from './composables/useMaterialManager';
+import { storeToRefs } from 'pinia';
+import { ApiService } from './services/ApiService';
 
 const viewportComponent = ref<ComponentPublicInstance | null>(null);
+
+const sensorStore = useSensorStore();
+const sceneStore = useSceneStore();
+
+const { sensorData, sensorsInfo, sensorMappings } = storeToRefs(sensorStore);
+const {
+  showObjectTree, showOverview, ghostingEnabled, isDragging,
+  loadingStatus, selectedObject, hoveredObject, currentModel
+} = storeToRefs(sceneStore);
+
 const apiStatus = ref<string>('checking...');
-const isDragging = ref<boolean>(false);
-const loadingStatus = ref<LoadingStatusType | null>(null);
-const showObjectTree = ref<boolean>(false);
-const showOverview = ref<boolean>(false);
-const ghostingEnabled = ref<boolean>(true);
-const selectedObject = ref<THREE.Object3D | null>(null);
-const hoveredObject = ref<THREE.Object3D | null>(null);
+
+const {
+  initThree, startAnimationLoop, stopAnimationLoop, fitCameraToModel, cameraRef, getScene, getModelManager
+} = useThreeScene();
+
+const { pickObject } = useRaycaster(cameraRef, currentModel);
+
+const {
+  buildInteractionMaterials, clearInteractionMaterials, applyInteractionMaterials
+} = useMaterialManager(sensorMappings, sensorData, ghostingEnabled);
 
 const selectedSensorId = computed(() => {
   if (selectedObject.value) {
@@ -124,505 +128,137 @@ const selectedSensorId = computed(() => {
   return null;
 });
 
-// IoT Data
-const ioSocket = ref<Socket | null>(null);
-const sensorData = ref<Record<string, any>>({});
-const sensorsInfo = ref<any[]>([]);
-const sensorMappings = ref<Record<string, string>>({}); // uuid -> sensorId
-
-let renderer: THREE.WebGLRenderer;
-let cameraRef = shallowRef<THREE.PerspectiveCamera | null>(null);
-let camera: THREE.PerspectiveCamera;
-let scene: THREE.Scene;
-let controls: OrbitControls;
-let frameId: number;
-let handleResize: (() => void) | undefined;
-let modelManager: ModelManager;
-const currentModel = shallowRef<THREE.Object3D | null>(null);
-let raycaster = new THREE.Raycaster();
-let mouse = new THREE.Vector2();
-
-interface MeshMaterialState {
-  mesh: THREE.Mesh;
-  original: THREE.Material | THREE.Material[];
-  ghost: THREE.Material | THREE.Material[];
-  highlight: THREE.Material | THREE.Material[];
-  critical: THREE.Material | THREE.Material[];
-}
-
-const meshMaterialStates = new Map<string, MeshMaterialState>();
-
 const objectTreeItems = computed(() => {
   if (!currentModel.value) return [];
   const items: THREE.Object3D[] = [];
   currentModel.value.traverse((child) => {
-    if (child !== currentModel.value) {
-      items.push(child);
-    }
+    if (child !== currentModel.value) items.push(child);
   });
   return items;
 });
 
 async function checkApi(): Promise<void> {
   try {
-    const response = await fetch('/api/health');
-    const { status } = await response.json();
+    const { status } = await ApiService.checkHealth();
     apiStatus.value = status;
   } catch {
     apiStatus.value = 'offline';
   }
 }
 
-function initThree(): void {
-  const viewportEl = (viewportComponent.value as any)?.viewportElement;
-  if (!viewportEl) return;
-
-  const width = viewportEl.clientWidth;
-  const height = viewportEl.clientHeight;
-
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(width, height);
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.shadowMap.enabled = true;
-  viewportEl.appendChild(renderer.domElement);
-
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a1a);
-  scene.fog = new THREE.Fog(0x1a1a1a, 50, 100);
-
-  camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
-  camera.position.set(0, 2, 5);
-
-  // Enhanced lighting for architectural spaces
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-  dirLight.position.set(5, 10, 7);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 2048;
-  dirLight.shadow.mapSize.height = 2048;
-  scene.add(dirLight);
-
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-  scene.add(ambientLight);
-
-  // Add a point light for more atmospheric lighting
-  const pointLight = new THREE.PointLight(0xffffff, 0.5);
-  pointLight.position.set(-5, 3, -5);
-  scene.add(pointLight);
-
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 0, 0);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
-  controls.autoRotate = false;
-
-  cameraRef.value = camera;
-
-  // Initialize ModelManager
-  modelManager = new ModelManager(scene);
-
-  handleResize = () => {
-    const nextWidth = viewportEl.clientWidth;
-    const nextHeight = viewportEl.clientHeight;
-    camera.aspect = nextWidth / nextHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(nextWidth, nextHeight);
-  };
-
-  window.addEventListener('resize', handleResize);
-}
-
 function toggleObjectTree(): void {
-  showObjectTree.value = !showObjectTree.value;
+  sceneStore.toggleObjectTree();
 }
 
 function toggleGhosting(): void {
-  ghostingEnabled.value = !ghostingEnabled.value;
-  applyInteractionMaterials();
+  sceneStore.toggleGhosting();
+  applyInteractionMaterials(hoveredObject.value, selectedObject.value);
+}
+
+function toggleOverview(): void {
+  sceneStore.toggleOverview();
 }
 
 function handleViewportClick(event: MouseEvent): void {
-  const hit = pickObject(event);
-  if (hit) {
-    selectObject(hit);
-    return;
-  }
-
-  deselectObject();
+  const hit = pickObject(event, (viewportComponent.value as any)?.viewportElement);
+  if (hit) selectObject(hit);
+  else deselectObject();
 }
 
 function selectObject(obj: THREE.Object3D): void {
   hoveredObject.value = obj;
   selectedObject.value = obj;
-  applyInteractionMaterials();
+  applyInteractionMaterials(hoveredObject.value, selectedObject.value);
 }
 
 function deselectObject(): void {
   hoveredObject.value = null;
   selectedObject.value = null;
-  applyInteractionMaterials();
+  applyInteractionMaterials(hoveredObject.value, selectedObject.value);
 }
 
 function handleViewportPointerMove(event: MouseEvent): void {
-  const hit = pickObject(event);
+  const hit = pickObject(event, (viewportComponent.value as any)?.viewportElement);
   if (hit) {
     if (hoveredObject.value !== hit) {
       hoveredObject.value = hit;
-      applyInteractionMaterials();
+      applyInteractionMaterials(hoveredObject.value, selectedObject.value);
     }
-    return;
-  }
-
-  if (hoveredObject.value !== null) {
+  } else if (hoveredObject.value !== null) {
     hoveredObject.value = null;
-    applyInteractionMaterials();
+    applyInteractionMaterials(hoveredObject.value, selectedObject.value);
   }
 }
 
 function handleViewportPointerLeave(): void {
   if (hoveredObject.value !== null) {
     hoveredObject.value = null;
-    applyInteractionMaterials();
+    applyInteractionMaterials(hoveredObject.value, selectedObject.value);
   }
-}
-
-function pickObject(event: MouseEvent): THREE.Object3D | null {
-  const viewportEl = (viewportComponent.value as any)?.viewportElement;
-  if (!viewportEl || !currentModel.value) {
-    return null;
-  }
-
-  const rect = viewportEl.getBoundingClientRect();
-  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-  raycaster.setFromCamera(mouse, camera);
-
-  const intersects = raycaster.intersectObject(currentModel.value, true);
-  return intersects[0]?.object ?? null;
-}
-
-function createGhostMaterial(material: THREE.Material): THREE.Material {
-  const ghost = material.clone();
-  const transparentGhost = ghost as THREE.Material & { opacity?: number; transparent?: boolean; depthWrite?: boolean };
-  transparentGhost.transparent = true;
-  transparentGhost.opacity = 0.13;
-  transparentGhost.depthWrite = false;
-  return ghost;
-}
-
-function createHighlightMaterial(material: THREE.Material): THREE.Material {
-  const highlight = material.clone();
-  const typedHighlight = highlight as THREE.Material & {
-    color?: THREE.Color;
-    emissive?: THREE.Color;
-    emissiveIntensity?: number;
-    opacity?: number;
-    transparent?: boolean;
-    depthWrite?: boolean;
-  };
-
-  typedHighlight.transparent = true;
-  typedHighlight.opacity = 0.95;
-  typedHighlight.depthWrite = true;
-
-  if (typedHighlight.color) {
-    typedHighlight.color = typedHighlight.color.clone().lerp(new THREE.Color(0xfbbf24), 0.35);
-  }
-  if (typedHighlight.emissive) {
-    typedHighlight.emissive = new THREE.Color(0x664400);
-    typedHighlight.emissiveIntensity = 0.45;
-  }
-
-  return highlight;
-}
-
-function createCriticalMaterial(material: THREE.Material): THREE.Material {
-  const crit = material.clone();
-  const typedCrit = crit as THREE.Material & {
-    color?: THREE.Color;
-    emissive?: THREE.Color;
-    emissiveIntensity?: number;
-    transparent?: boolean;
-    opacity?: number;
-    depthWrite?: boolean;
-  };
-
-  typedCrit.transparent = true;
-  typedCrit.opacity = 0.9;
-  typedCrit.depthWrite = true;
-
-  if (typedCrit.color) {
-    typedCrit.color = typedCrit.color.clone().lerp(new THREE.Color(0xef4444), 0.8);
-  }
-  if (typedCrit.emissive) {
-    typedCrit.emissive = new THREE.Color(0x990000);
-    typedCrit.emissiveIntensity = 0.8;
-  }
-
-  return crit;
-}
-
-function buildInteractionMaterials(model: THREE.Object3D): void {
-  clearInteractionMaterials();
-
-  model.traverse((child) => {
-    const mesh = child as THREE.Mesh;
-    if (!mesh.isMesh || !mesh.material) {
-      return;
-    }
-
-    const original = mesh.material;
-    const ghost = Array.isArray(original)
-      ? original.map((material) => createGhostMaterial(material))
-      : createGhostMaterial(original);
-    const highlight = Array.isArray(original)
-      ? original.map((material) => createHighlightMaterial(material))
-      : createHighlightMaterial(original);
-    const critical = Array.isArray(original)
-      ? original.map((material) => createCriticalMaterial(material))
-      : createCriticalMaterial(original);
-
-    meshMaterialStates.set(mesh.uuid, {
-      mesh,
-      original,
-      ghost,
-      highlight,
-      critical
-    });
-  });
-
-  applyInteractionMaterials();
-}
-
-function clearInteractionMaterials(): void {
-  meshMaterialStates.forEach(({ mesh, original, ghost, highlight, critical }) => {
-    if (mesh.material !== original) {
-      mesh.material = original;
-    }
-
-    const ghostMaterials = Array.isArray(ghost) ? ghost : [ghost];
-    ghostMaterials.forEach((material) => material.dispose());
-
-    const highlightMaterials = Array.isArray(highlight) ? highlight : [highlight];
-    highlightMaterials.forEach((material) => material.dispose());
-
-    const criticalMaterials = Array.isArray(critical) ? critical : [critical];
-    criticalMaterials.forEach((material) => material.dispose());
-  });
-
-  meshMaterialStates.clear();
-}
-
-function resolveFocusedMesh(): THREE.Mesh | null {
-  const candidate = (hoveredObject.value ?? selectedObject.value) as THREE.Object3D | null;
-  if (!candidate) return null;
-
-  const directMesh = candidate as THREE.Mesh;
-  if (directMesh.isMesh) {
-    return directMesh;
-  }
-
-  let firstMesh: THREE.Mesh | null = null;
-  candidate.traverse((child) => {
-    if (!firstMesh) {
-      const mesh = child as THREE.Mesh;
-      if (mesh.isMesh) {
-        firstMesh = mesh;
-      }
-    }
-  });
-
-  return firstMesh;
-}
-
-function applyInteractionMaterials(): void {
-  if (!currentModel.value || meshMaterialStates.size === 0) return;
-
-  const focusedMesh = resolveFocusedMesh();
-
-  // Determine if a material should be purely critical
-  const time = Date.now() * 0.003;
-  const pulseIntensity = (Math.sin(time) + 1) / 2; // 0 to 1
-
-  meshMaterialStates.forEach((state) => {
-    const sensorId = sensorMappings.value[state.mesh.uuid];
-    let isCritical = false;
-    let isWarning = false;
-
-    if (sensorId && sensorData.value[sensorId]) {
-      const sensorReading = sensorData.value[sensorId];
-      isCritical = sensorReading.isCritical;
-      isWarning = sensorReading.isWarning;
-
-      // Update the critical material's emissive intensity dynamically for pulsing
-      if (isCritical) {
-        const crits = Array.isArray(state.critical) ? state.critical : [state.critical];
-        crits.forEach(m => {
-          if ((m as any).emissiveIntensity !== undefined) {
-            (m as any).emissiveIntensity = 0.5 + pulseIntensity * 0.5; // pulses between 0.5 and 1.0
-          }
-        });
-      }
-    }
-
-    if (focusedMesh && state.mesh.uuid === focusedMesh.uuid) {
-      state.mesh.material = isCritical ? state.critical : state.highlight;
-    } else if (focusedMesh) {
-      state.mesh.material = state.ghost;
-    } else {
-      if (isCritical) {
-        state.mesh.material = state.critical;
-      } else {
-        state.mesh.material = ghostingEnabled.value ? state.ghost : state.original;
-      }
-    }
-  });
-}
-
-function handleMappingUpdate(uuid: string, sensorId: string): void {
-  sensorMappings.value = { ...sensorMappings.value, [uuid]: sensorId };
-  // Save to localStorage
-  localStorage.setItem('iot-sensor-mappings', JSON.stringify(sensorMappings.value));
-  applyInteractionMaterials();
 }
 
 async function handleDrop(event: DragEvent): Promise<void> {
-  isDragging.value = false;
+  sceneStore.isDragging = false;
   const files = event.dataTransfer?.files;
-
   if (!files || files.length === 0) return;
 
-  // Group files by base name
   const fileMap = new Map<string, { [key: string]: File }>();
   for (let file of Array.from(files)) {
     const baseName = file.name.replace(/\.(obj|mtl|glb|gltf)$/i, '');
-    if (!fileMap.has(baseName)) {
-      fileMap.set(baseName, {});
-    }
+    if (!fileMap.has(baseName)) fileMap.set(baseName, {});
     const ext = file.name.split('.').pop()?.toLowerCase();
-    if (ext) {
-      fileMap.get(baseName)![ext] = file;
-    }
+    if (ext) fileMap.get(baseName)![ext] = file;
   }
 
-  // Load the first model file found
   for (let [, files] of fileMap) {
     try {
       const mainFile = files.obj || files.glb || files.gltf;
       if (!mainFile) continue;
 
-      loadingStatus.value = { type: 'loading', message: `Loading ${mainFile.name}...` };
-      console.log('Loading model:', mainFile.name);
+      sceneStore.setLoading('loading', `Loading ${mainFile.name}...`);
 
-      // Remove previous model
       if (currentModel.value) {
         clearInteractionMaterials();
-        modelManager.removeModel('dropped-model');
-        scene.remove(currentModel.value);
+        getModelManager().removeModel('dropped-model');
+        getScene().remove(currentModel.value);
         currentModel.value = null;
       }
 
-      // Load the model
-      const model = await modelManager.loadModelFromFiles('dropped-model', mainFile, files.mtl);
+      const model = await getModelManager().loadModelFromFiles('dropped-model', mainFile, files.mtl);
       currentModel.value = model;
       buildInteractionMaterials(model);
-      console.log('Model loaded successfully:', model);
 
-      loadingStatus.value = { type: 'success', message: `Loaded: ${mainFile.name}` };
-      setTimeout(() => {
-        loadingStatus.value = null;
-      }, 2000);
+      sceneStore.setLoading('success', `Loaded: ${mainFile.name}`);
+      setTimeout(() => sceneStore.setLoading(null), 2000);
 
-      // Fit camera to model
       fitCameraToModel(model);
       deselectObject();
       break;
     } catch (error) {
-      console.error('Error loading model:', error);
-      loadingStatus.value = {
-        type: 'error',
-        message: `Failed to load model: ${error instanceof Error ? error.message : String(error)}`
-      };
-      setTimeout(() => {
-        loadingStatus.value = null;
-      }, 3000);
+      sceneStore.setLoading('error', `Failed: ${error}`);
+      setTimeout(() => sceneStore.setLoading(null), 3000);
     }
   }
 }
 
-function fitCameraToModel(model: THREE.Object3D): void {
-  const box = new THREE.Box3().setFromObject(model);
-  const size = box.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
-  const fov = camera.fov * (Math.PI / 180);
-  let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-  cameraZ *= 1.5;
-
-  const center = box.getCenter(new THREE.Vector3());
-  camera.position.copy(center);
-  camera.position.z += cameraZ;
-  controls.target.copy(center);
-  controls.update();
-}
-
-function animate(): void {
-  controls.update();
-  applyInteractionMaterials(); // Continuously update to pulse critical materials
-  renderer.render(scene, camera);
-  frameId = requestAnimationFrame(animate);
+function onFrame() {
+  applyInteractionMaterials(hoveredObject.value, selectedObject.value);
 }
 
 onMounted(() => {
-  // Load sensor mappings
-  const savedMappings = localStorage.getItem('iot-sensor-mappings');
-  if (savedMappings) {
-    try {
-      sensorMappings.value = JSON.parse(savedMappings);
-    } catch {}
-  }
-
-  // Connect WebSocket
-  const host = window.location.hostname === 'localhost' ? 'http://localhost:3000' : window.location.origin;
-  ioSocket.value = io(host);
-
-  ioSocket.value.on('sensors-info', (info: any) => {
-    console.log('📡 Received sensors-info:', info);
-    sensorsInfo.value = info;
-  });
-
-  ioSocket.value.on('sensor-update', (data: any[]) => {
-    console.log('📊 Received sensor-update:', data);
-    const newData = { ...sensorData.value };
-    data.forEach(d => { newData[d.id] = d; });
-    sensorData.value = newData;
-  });
+  sensorStore.loadMappings();
+  sensorStore.initSocket();
 
   checkApi();
-  initThree();
-  animate();
+  const el = (viewportComponent.value as any)?.viewportElement;
+  if (el) initThree(el);
+
+  startAnimationLoop(onFrame);
 });
 
 onBeforeUnmount(() => {
-  cancelAnimationFrame(frameId);
-  if (handleResize) {
-    window.removeEventListener('resize', handleResize);
-  }
-
-  if (controls) {
-    controls.dispose();
-  }
-
-  if (modelManager) {
-    clearInteractionMaterials();
-    modelManager.disposeAll();
-  }
-
-  if (ioSocket.value) {
-    ioSocket.value.disconnect();
-  }
-
-  if (renderer) {
-    renderer.dispose();
-  }
+  stopAnimationLoop();
+  clearInteractionMaterials();
 });
 
 </script>
