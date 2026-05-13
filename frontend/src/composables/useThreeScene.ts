@@ -81,7 +81,10 @@ export function useThreeScene() {
       window.removeEventListener('resize', handleResize);
     }
     if (controls) controls.dispose();
-    if (renderer) renderer.dispose();
+    if (renderer) {
+      renderer.dispose();
+      renderer.domElement.parentElement?.removeChild(renderer.domElement);
+    }
     if (modelManager) modelManager.disposeAll();
   }
 

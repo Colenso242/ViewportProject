@@ -9,6 +9,23 @@ interface MeshMaterialState {
   critical: THREE.Material | THREE.Material[];
 }
 
+type ColoredMaterial = THREE.Material & { color: THREE.Color };
+type EmissiveMaterial = THREE.Material & { emissive: THREE.Color; emissiveIntensity: number };
+
+function hasColor(m: THREE.Material): m is ColoredMaterial {
+  return 'color' in m && (m as ColoredMaterial).color instanceof THREE.Color;
+}
+
+function hasEmissive(m: THREE.Material): m is EmissiveMaterial {
+  return 'emissive' in m && (m as EmissiveMaterial).emissive instanceof THREE.Color;
+}
+
+const HIGHLIGHT_TINT = new THREE.Color(0xfbbf24);
+const HIGHLIGHT_EMISSIVE = new THREE.Color(0x664400);
+const CRITICAL_TINT = new THREE.Color(0xef4444);
+const CRITICAL_EMISSIVE = new THREE.Color(0x990000);
+const WARNING_EMISSIVE = new THREE.Color(0xb45309);
+
 export function useMaterialManager(
   sensorMappings: Ref<Record<string, string>>,
   sensorData: Ref<Record<string, any>>,
@@ -18,37 +35,34 @@ export function useMaterialManager(
 
   function createGhostMaterial(material: THREE.Material): THREE.Material {
     const ghost = material.clone();
-    const transparentGhost = ghost as any;
-    transparentGhost.transparent = true;
-    transparentGhost.opacity = 0.13;
-    transparentGhost.depthWrite = false;
+    ghost.transparent = true;
+    ghost.opacity = 0.13;
+    ghost.depthWrite = false;
     return ghost;
   }
 
   function createHighlightMaterial(material: THREE.Material): THREE.Material {
     const highlight = material.clone();
-    const typedHighlight = highlight as any;
-    typedHighlight.transparent = true;
-    typedHighlight.opacity = 0.95;
-    typedHighlight.depthWrite = true;
-    if (typedHighlight.color) typedHighlight.color = typedHighlight.color.clone().lerp(new THREE.Color(0xfbbf24), 0.35);
-    if (typedHighlight.emissive) {
-      typedHighlight.emissive = new THREE.Color(0x664400);
-      typedHighlight.emissiveIntensity = 0.45;
+    highlight.transparent = true;
+    highlight.opacity = 0.95;
+    highlight.depthWrite = true;
+    if (hasColor(highlight)) highlight.color.lerp(HIGHLIGHT_TINT, 0.35);
+    if (hasEmissive(highlight)) {
+      highlight.emissive.copy(HIGHLIGHT_EMISSIVE);
+      highlight.emissiveIntensity = 0.45;
     }
     return highlight;
   }
 
   function createCriticalMaterial(material: THREE.Material): THREE.Material {
     const crit = material.clone();
-    const typedCrit = crit as any;
-    typedCrit.transparent = true;
-    typedCrit.opacity = 0.9;
-    typedCrit.depthWrite = true;
-    if (typedCrit.color) typedCrit.color = typedCrit.color.clone().lerp(new THREE.Color(0xef4444), 0.8);
-    if (typedCrit.emissive) {
-      typedCrit.emissive = new THREE.Color(0x990000);
-      typedCrit.emissiveIntensity = 0.8;
+    crit.transparent = true;
+    crit.opacity = 0.9;
+    crit.depthWrite = true;
+    if (hasColor(crit)) crit.color.lerp(CRITICAL_TINT, 0.8);
+    if (hasEmissive(crit)) {
+      crit.emissive.copy(CRITICAL_EMISSIVE);
+      crit.emissiveIntensity = 0.8;
     }
     return crit;
   }
@@ -72,7 +86,7 @@ export function useMaterialManager(
   function clearInteractionMaterials(): void {
     meshMaterialStates.forEach(({ mesh, original, ghost, highlight, critical }) => {
       if (mesh.material !== original) mesh.material = original;
-      [ghost, highlight, critical].flat().forEach(m => (m as THREE.Material).dispose());
+      [ghost, highlight, critical].flat().forEach(m => m.dispose());
     });
     meshMaterialStates.clear();
   }
@@ -104,15 +118,11 @@ export function useMaterialManager(
 
       if (isCritical || isWarning) {
         const crits = Array.isArray(state.critical) ? state.critical : [state.critical];
+        const targetEmissive = (isWarning && !isCritical) ? WARNING_EMISSIVE : CRITICAL_EMISSIVE;
         crits.forEach(m => {
-          if ((m as any).emissiveIntensity !== undefined) {
-             // critical pulses red, warning pulses yellow/orange but handled by material props
-            (m as any).emissiveIntensity = 0.5 + pulseIntensity * 0.5;
-            if(isWarning && !isCritical) {
-                 (m as any).emissive = new THREE.Color(0xb45309); // orange for warning
-            } else {
-                 (m as any).emissive = new THREE.Color(0x990000); // red for critical
-            }
+          if (hasEmissive(m)) {
+            m.emissiveIntensity = 0.5 + pulseIntensity * 0.5;
+            m.emissive.copy(targetEmissive);
           }
         });
       }
@@ -130,4 +140,3 @@ export function useMaterialManager(
 
   return { buildInteractionMaterials, clearInteractionMaterials, applyInteractionMaterials };
 }
-

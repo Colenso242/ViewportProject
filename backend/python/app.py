@@ -24,13 +24,15 @@ if autorefresh_on:
     # La chiave 'data_refresh' fa ricaricare solo il container all'interval settato
     st_autorefresh(interval=refresh_interval * 1000, key="data_refresh")
 
-# Funzione in cache per evitare query duplicate nei reruns spuri di Streamlit
-@st.cache_data(ttl=refresh_interval if autorefresh_on else 60)
+
+# Short TTL deduplicates spurious Streamlit reruns without blocking fresh reads.
+# Cannot use a dynamic TTL here — @st.cache_data reads the argument once at
+# definition time, not on every rerun.
+@st.cache_data(ttl=5)
 def load_data(limit, time_range):
     db = DatabaseManager()
     if not db.client:
         db.connect()
-
     data = db.get_historical_data(limit=limit, time_range_minutes=time_range)
 
     if data:
@@ -49,6 +51,7 @@ def load_data(limit, time_range):
         return pd.DataFrame(flattened)
     return pd.DataFrame()
 
+
 # Caricamento del Dataframe e Rendering UI
 df = load_data(record_limit, time_range_minutes)
 
@@ -56,4 +59,3 @@ if df.empty:
     st.warning("No data found in the database. Ensure the simulator is running.")
 else:
     render_sensor_charts(df, SensorConfig.SENSORS)
-

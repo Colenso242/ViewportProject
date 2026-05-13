@@ -20,8 +20,6 @@ class SensorDataGenerator:
         """
         value = self._calculate_value(sensor)
 
-        # Calculate warning and critical thresholds
-        range_size = sensor["max"] - sensor["min"]
         threshold = sensor["threshold"]
         # Warning zone: 40% between threshold and max
         warning_threshold = threshold + (sensor["max"] - threshold) * 0.4

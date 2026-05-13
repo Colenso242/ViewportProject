@@ -12,16 +12,23 @@ export const useSensorStore = defineStore('sensorStore', () => {
     const socket = socketService.connect();
 
     socket.on('sensors-info', (info: SensorConfig[]) => {
-      console.log('📡 Received sensors-info:', info);
       sensorsInfo.value = info;
     });
 
     socket.on('sensor-update', (data: SensorReading[]) => {
-      // console.log('📊 Received sensor-update:', data);
       const newData = { ...sensorData.value };
       data.forEach(d => { newData[d.id] = d; });
       sensorData.value = newData;
     });
+  }
+
+  function disconnectSocket() {
+    const socket = socketService.getSocket();
+    if (socket) {
+      socket.off('sensors-info');
+      socket.off('sensor-update');
+    }
+    socketService.disconnect();
   }
 
   function loadMappings() {
@@ -29,7 +36,10 @@ export const useSensorStore = defineStore('sensorStore', () => {
     if (saved) {
       try {
         sensorMappings.value = JSON.parse(saved);
-      } catch {}
+      } catch (err) {
+        console.warn('Failed to parse stored sensor mappings; resetting.', err);
+        localStorage.removeItem('iot-sensor-mappings');
+      }
     }
   }
 
@@ -43,8 +53,8 @@ export const useSensorStore = defineStore('sensorStore', () => {
     sensorsInfo,
     sensorMappings,
     initSocket,
+    disconnectSocket,
     loadMappings,
     updateMapping
   };
 });
-

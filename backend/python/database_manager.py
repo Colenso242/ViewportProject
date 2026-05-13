@@ -1,5 +1,6 @@
 """Database connection and collection management."""
 import threading
+from datetime import datetime, timedelta
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 from config import DatabaseConfig, TimeSeriesConfig
@@ -87,21 +88,18 @@ class DatabaseManager:
 
     def get_historical_data(self, limit=1000, time_range_minutes=None):
         """Retrieve historical sensor data from the time series collection."""
-        from datetime import datetime, timedelta
-        
         query = {}
         if time_range_minutes:
             time_threshold = datetime.utcnow() - timedelta(minutes=time_range_minutes)
             query[TimeSeriesConfig.TIME_FIELD] = {"$gte": time_threshold}
-            
+
         try:
             cursor = self.timeseries_collection.find(
-                query, 
+                query,
                 {"_id": 0}
-            ).sort(TimeSeriesConfig.TIME_FIELD, -1).limit(limit)
-            
-            # Return ascending order for charts
-            return list(cursor)[::-1]
+            ).sort(TimeSeriesConfig.TIME_FIELD, 1).limit(limit)
+
+            return list(cursor)
         except Exception as e:
             print(f"Failed to fetch historical data: {e}")
             return []

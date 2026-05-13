@@ -10,8 +10,8 @@
     />
 
     <div class="main-container">
-      <div class="viewport-wrapper" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative;">
-        <div class="workspace-row" style="flex: 1; display: flex; overflow: hidden;">
+      <div class="viewport-wrapper">
+        <div class="workspace-row">
           <ObjectTree
             v-if="showObjectTree"
             :object-tree-items="objectTreeItems"
@@ -22,7 +22,6 @@
           <Viewport3D
             ref="viewportComponent"
             :is-dragging="isDragging"
-            style="flex: 1; position: relative"
             @drag-over="isDragging = true"
             @drag-leave="isDragging = false"
             @drop="handleDrop"
@@ -40,7 +39,7 @@
               <SensorOverlay
                 v-if="cameraRef && currentModel && viewportComponent"
                 :camera="cameraRef"
-                :viewportEl="(viewportComponent as any)?.viewportElement"
+                :viewportEl="viewportComponent?.viewportElement ?? null"
                 :currentModel="currentModel"
                 :sensorMappings="sensorMappings"
                 :sensorData="sensorData"
@@ -77,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, computed, ComponentPublicInstance } from 'vue';
+import { onBeforeUnmount, onMounted, ref, computed } from 'vue';
 import * as THREE from 'three';
 import Toolbar from './components/viewport/Toolbar.vue';
 import ObjectTree from './components/viewport/ObjectTree.vue';
@@ -98,14 +97,18 @@ import { useMaterialManager } from './composables/useMaterialManager';
 import { storeToRefs } from 'pinia';
 import { ApiService } from './services/ApiService';
 
-const viewportComponent = ref<ComponentPublicInstance | null>(null);
+interface Viewport3DExposed {
+  viewportElement: HTMLElement | null;
+}
+const viewportComponent = ref<Viewport3DExposed | null>(null);
+const isDragging = ref<boolean>(false);
 
 const sensorStore = useSensorStore();
 const sceneStore = useSceneStore();
 
 const { sensorData, sensorsInfo, sensorMappings } = storeToRefs(sensorStore);
 const {
-  showObjectTree, showOverview, ghostingEnabled, isDragging,
+  showObjectTree, showOverview, ghostingEnabled,
   loadingStatus, selectedObject, hoveredObject, currentModel
 } = storeToRefs(sceneStore);
 
@@ -160,7 +163,7 @@ function toggleOverview(): void {
 }
 
 function handleViewportClick(event: MouseEvent): void {
-  const hit = pickObject(event, (viewportComponent.value as any)?.viewportElement);
+  const hit = pickObject(event, viewportComponent.value?.viewportElement ?? null);
   if (hit) selectObject(hit);
   else deselectObject();
 }
@@ -178,7 +181,7 @@ function deselectObject(): void {
 }
 
 function handleViewportPointerMove(event: MouseEvent): void {
-  const hit = pickObject(event, (viewportComponent.value as any)?.viewportElement);
+  const hit = pickObject(event, viewportComponent.value?.viewportElement ?? null);
   if (hit) {
     if (hoveredObject.value !== hit) {
       hoveredObject.value = hit;
@@ -198,7 +201,7 @@ function handleViewportPointerLeave(): void {
 }
 
 async function handleDrop(event: DragEvent): Promise<void> {
-  sceneStore.isDragging = false;
+  isDragging.value = false;
   const files = event.dataTransfer?.files;
   if (!files || files.length === 0) return;
 
@@ -250,7 +253,7 @@ onMounted(() => {
   sensorStore.initSocket();
 
   checkApi();
-  const el = (viewportComponent.value as any)?.viewportElement;
+  const el = viewportComponent.value?.viewportElement;
   if (el) initThree(el);
 
   startAnimationLoop(onFrame);
@@ -259,6 +262,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopAnimationLoop();
   clearInteractionMaterials();
+  sensorStore.disconnectSocket();
 });
 
 </script>
@@ -281,6 +285,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   flex: 1;
   position: relative;
+  overflow: hidden;
 }
 
 .workspace-row {

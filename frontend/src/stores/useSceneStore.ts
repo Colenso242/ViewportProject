@@ -6,7 +6,6 @@ export const useSceneStore = defineStore('sceneStore', () => {
   const showObjectTree = ref<boolean>(false);
   const showOverview = ref<boolean>(false);
   const ghostingEnabled = ref<boolean>(true);
-  const isDragging = ref<boolean>(false);
 
   const loadingStatus = ref<{ type: 'loading' | 'success' | 'error'; message: string } | null>(null);
 
@@ -39,7 +38,6 @@ export const useSceneStore = defineStore('sceneStore', () => {
     showObjectTree,
     showOverview,
     ghostingEnabled,
-    isDragging,
     loadingStatus,
     selectedObject,
     hoveredObject,
