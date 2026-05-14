@@ -1,4 +1,4 @@
-import { Collection } from 'mongodb';
+import { Collection, Filter } from 'mongodb';
 import { SensorReading, SensorData } from '../types';
 
 export class SensorService {
@@ -26,7 +26,7 @@ export class SensorService {
 
   async getHistoricalData(sensorId: string, limit: number = 1000, timeRangeMinutes?: number): Promise<SensorData[]> {
     try {
-      const query: any = { "metadata.sensorId": sensorId };
+      const query: Filter<SensorReading> = { "metadata.sensorId": sensorId };
       if (timeRangeMinutes) {
         const timeThreshold = new Date(Date.now() - timeRangeMinutes * 60 * 1000);
         query.timestamp = { $gte: timeThreshold };

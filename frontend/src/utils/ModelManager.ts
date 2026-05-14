@@ -330,14 +330,6 @@ export class ModelManager {
   }
 
   /**
-   * Get animation mixer for a model
-   * @deprecated This method is kept for future use but not currently used in the application
-   */
-  getMixer(name: string): THREE.AnimationMixer | undefined {
-    return this.mixers.get(name);
-  }
-
-  /**
    * Play an animation on a model (GLTF/GLB only)
    */
   playAnimation(modelName: string, animationIndex = 0): THREE.AnimationAction | null {
@@ -417,10 +409,6 @@ export class ModelManager {
     });
   }
 }
-
-
-
-
 
 
 

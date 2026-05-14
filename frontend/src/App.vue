@@ -41,6 +41,7 @@
                 :camera="cameraRef"
                 :viewportEl="viewportComponent?.viewportElement ?? null"
                 :currentModel="currentModel"
+                :meshLookup="meshLookup"
                 :sensorMappings="sensorMappings"
                 :sensorData="sensorData"
               />
@@ -96,6 +97,7 @@ import { useRaycaster } from './composables/useRaycaster';
 import { useMaterialManager } from './composables/useMaterialManager';
 import { storeToRefs } from 'pinia';
 import { ApiService } from './services/ApiService';
+import { assignStableIds, getStableId } from './utils/stableMeshId';
 
 interface Viewport3DExposed {
   viewportElement: HTMLElement | null;
@@ -109,7 +111,7 @@ const sceneStore = useSceneStore();
 const { sensorData, sensorsInfo, sensorMappings } = storeToRefs(sensorStore);
 const {
   showObjectTree, showOverview, ghostingEnabled,
-  loadingStatus, selectedObject, hoveredObject, currentModel
+  loadingStatus, selectedObject, hoveredObject, currentModel, meshLookup
 } = storeToRefs(sceneStore);
 
 const apiStatus = ref<string>('checking...');
@@ -125,10 +127,9 @@ const {
 } = useMaterialManager(sensorMappings, sensorData, ghostingEnabled);
 
 const selectedSensorId = computed(() => {
-  if (selectedObject.value) {
-    return sensorMappings.value[selectedObject.value.uuid] || null;
-  }
-  return null;
+  const stableId = getStableId(selectedObject.value);
+  if (!stableId) return null;
+  return sensorMappings.value[stableId] || null;
 });
 
 const objectTreeItems = computed(() => {
@@ -225,9 +226,11 @@ async function handleDrop(event: DragEvent): Promise<void> {
         getModelManager().removeModel('dropped-model');
         getScene().remove(currentModel.value);
         currentModel.value = null;
+        meshLookup.value = new Map();
       }
 
       const model = await getModelManager().loadModelFromFiles('dropped-model', mainFile, files.mtl);
+      meshLookup.value = assignStableIds(model);
       currentModel.value = model;
       buildInteractionMaterials(model);
 

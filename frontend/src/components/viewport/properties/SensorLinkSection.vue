@@ -35,6 +35,7 @@ import * as THREE from 'three';
 import { computed, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useSensorStore } from '../../../stores/useSensorStore';
+import { getStableId } from '../../../utils/stableMeshId';
 
 type SensorOption = {
   id: string;
@@ -60,16 +61,21 @@ const sensorOptions = computed(() => sensorsInfo.value as SensorOption[]);
 
 const linkedSensor = ref('');
 
+const stableId = computed(() => getStableId(props.selectedObject));
+
 watch(
   [() => props.selectedObject, sensorMappings],
-  ([obj]) => {
-    linkedSensor.value = obj ? sensorMappings.value[obj.uuid] || '' : '';
+  () => {
+    const id = stableId.value;
+    linkedSensor.value = id ? sensorMappings.value[id] || '' : '';
   },
   { immediate: true }
 );
 
 function updateLink() {
-  sensorStore.updateMapping(props.selectedObject.uuid, linkedSensor.value);
+  const id = stableId.value;
+  if (!id) return;
+  sensorStore.updateMapping(id, linkedSensor.value);
 }
 
 const linkedSensorData = computed(() => {

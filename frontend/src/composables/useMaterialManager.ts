@@ -112,7 +112,8 @@ export function useMaterialManager(
     const pulseIntensity = (Math.sin(time) + 1) / 2;
 
     meshMaterialStates.forEach((state) => {
-      const sensorId = sensorMappings.value[state.mesh.uuid];
+      const stableId = state.mesh.userData.stableId as string | undefined;
+      const sensorId = stableId ? sensorMappings.value[stableId] : undefined;
       const isCritical = sensorId && sensorData.value[sensorId]?.isCritical;
       const isWarning = sensorId && sensorData.value[sensorId]?.isWarning;
 

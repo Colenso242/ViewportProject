@@ -13,6 +13,7 @@ export const useSceneStore = defineStore('sceneStore', () => {
   const selectedObject = shallowRef<THREE.Object3D | null>(null);
   const hoveredObject = shallowRef<THREE.Object3D | null>(null);
   const currentModel = shallowRef<THREE.Object3D | null>(null);
+  const meshLookup = shallowRef<Map<string, THREE.Object3D>>(new Map());
 
   function setLoading(type: 'loading' | 'success' | 'error' | null, message = '') {
     if (!type) {
@@ -42,10 +43,10 @@ export const useSceneStore = defineStore('sceneStore', () => {
     selectedObject,
     hoveredObject,
     currentModel,
+    meshLookup,
     setLoading,
     toggleObjectTree,
     toggleGhosting,
     toggleOverview
   };
 });
-

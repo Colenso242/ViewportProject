@@ -2,7 +2,7 @@
   <div class="sensor-overlay-container">
     <div
       v-for="item in mappedSensors"
-      :key="item.uuid"
+      :key="item.stableId"
       class="sensor-badge"
       :class="{ 'is-critical': item.data?.isCritical, 'is-warning': item.data?.isWarning }"
       :style="{ left: `${item.x}px`, top: `${item.y}px`, transform: `translate(-50%, -50%)` }"
@@ -28,12 +28,13 @@ const props = defineProps<{
   camera: THREE.Camera | null;
   viewportEl: HTMLElement | null;
   currentModel: THREE.Object3D | null;
+  meshLookup: Map<string, THREE.Object3D>;
   sensorMappings: Record<string, string>;
   sensorData: Record<string, any>;
 }>();
 
 interface MappedSensor {
-  uuid: string;
+  stableId: string;
   sensorId: string;
   x: number;
   y: number;
@@ -47,35 +48,20 @@ let animationFrameId = 0;
 let lastUpdateTime = 0;
 const UPDATE_INTERVAL = 1000 / 30; // 30fps position updates
 
-// Clear cache when model changes
 watch(() => props.currentModel, () => {
   meshPositionCache.clear();
 });
 
-function getMeshWorldPosition(uuid: string): THREE.Vector3 | null {
-  if (!props.currentModel) return null;
+function getMeshWorldPosition(stableId: string): THREE.Vector3 | null {
+  const cached = meshPositionCache.get(stableId);
+  if (cached) return cached.clone();
 
-  // 1. O(1) Lookup: Check cache first to avoid expensive scene traversal and Box3 calculation
-  if (meshPositionCache.has(uuid)) {
-    return meshPositionCache.get(uuid)!.clone();
-  }
-
-  let targetNode: THREE.Object3D | null = null;
-  props.currentModel.traverse((child) => {
-    if (child.uuid === uuid) {
-      targetNode = child;
-    }
-  });
-
-  if (!targetNode) return null;
+  const target = props.meshLookup.get(stableId);
+  if (!target) return null;
 
   const vector = new THREE.Vector3();
-
-  const box = new THREE.Box3().setFromObject(targetNode);
-  box.getCenter(vector);
-
-  // Cache the result
-  meshPositionCache.set(uuid, vector.clone());
+  new THREE.Box3().setFromObject(target).getCenter(vector);
+  meshPositionCache.set(stableId, vector.clone());
   return vector;
 }
 
@@ -85,7 +71,6 @@ function updatePositions() {
     return;
   }
 
-  // 2. Throttle updates: Project coordinates at 30 fps instead of 60+ fps
   const now = performance.now();
   if (now - lastUpdateTime < UPDATE_INTERVAL) {
     animationFrameId = requestAnimationFrame(updatePositions);
@@ -103,24 +88,23 @@ function updatePositions() {
 
   const newPositions: Record<string, { x: number, y: number, visible: boolean }> = {};
 
-  for (const [uuid, sensorId] of Object.entries(props.sensorMappings)) {
+  for (const [stableId, sensorId] of Object.entries(props.sensorMappings)) {
     if (!sensorId) continue;
 
-    const pos = getMeshWorldPosition(uuid);
+    const pos = getMeshWorldPosition(stableId);
     if (!pos) continue;
 
-    // Project 3D vector to 2D screen coordinate
     pos.project(props.camera);
 
     // After projection, NDC z must stay within [-1, 1] to be inside the
     // camera's near/far clipping planes.
     const isOutsideDepthRange = pos.z < -1 || pos.z > 1;
     if (isOutsideDepthRange) {
-      newPositions[uuid] = { x: 0, y: 0, visible: false };
+      newPositions[stableId] = { x: 0, y: 0, visible: false };
       continue;
     }
 
-    newPositions[uuid] = {
+    newPositions[stableId] = {
       x: (pos.x * widthHalf) + widthHalf,
       y: -(pos.y * heightHalf) + heightHalf,
       visible: true
@@ -142,10 +126,10 @@ onBeforeUnmount(() => {
 const mappedSensors = computed<MappedSensor[]>(() => {
   return Object.entries(props.sensorMappings)
     .filter(([_, sensorId]) => !!sensorId)
-    .map(([uuid, sensorId]) => {
-      const pos = projectedPositions.value[uuid] || { x: 0, y: 0, visible: false };
+    .map(([stableId, sensorId]) => {
+      const pos = projectedPositions.value[stableId] || { x: 0, y: 0, visible: false };
       return {
-        uuid,
+        stableId,
         sensorId,
         x: pos.x,
         y: pos.y,
@@ -234,4 +218,3 @@ const mappedSensors = computed<MappedSensor[]>(() => {
   font-family: monospace;
 }
 </style>
-
