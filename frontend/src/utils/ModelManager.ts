@@ -2,16 +2,20 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
+import { IFCLoader } from 'web-ifc-three';
 
 type MTLMaterialCreator = ReturnType<MTLLoader['parse']>;
 
-type ModelFormat = 'glb' | 'gltf' | 'obj';
+type ModelFormat = 'glb' | 'gltf' | 'obj' | 'ifc';
 
 export class ModelManager {
   private scene: THREE.Scene;
   private gltfLoader: GLTFLoader;
   private objLoader: OBJLoader;
   private mtlLoader: MTLLoader;
+  private ifcLoader: IFCLoader;
+  private ifcLoaderReady: Promise<void> | null = null;
+  private ifcModelIds: Map<string, number> = new Map();
   private models: Map<string, THREE.Object3D>;
   private animations: Map<string, THREE.AnimationClip[]>;
   private mixers: Map<string, THREE.AnimationMixer>;
@@ -21,9 +25,17 @@ export class ModelManager {
     this.gltfLoader = new GLTFLoader();
     this.objLoader = new OBJLoader();
     this.mtlLoader = new MTLLoader();
+    this.ifcLoader = new IFCLoader();
     this.models = new Map();
     this.animations = new Map();
     this.mixers = new Map();
+  }
+
+  private initIFCLoader(): Promise<void> {
+    if (!this.ifcLoaderReady) {
+      this.ifcLoaderReady = this.ifcLoader.ifcManager.setWasmPath('/');
+    }
+    return this.ifcLoaderReady;
   }
 
   /**
@@ -35,7 +47,8 @@ export class ModelManager {
     if (extension === 'glb') return 'glb';
     if (extension === 'gltf') return 'gltf';
     if (extension === 'obj') return 'obj';
-    throw new Error(`Unsupported format: .${extension}. Supported: .glb, .gltf, .obj`);
+    if (extension === 'ifc') return 'ifc';
+    throw new Error(`Unsupported format: .${extension}. Supported: .glb, .gltf, .obj, .ifc`);
   }
 
   /**
@@ -45,11 +58,9 @@ export class ModelManager {
     try {
       const format = this.getModelFormat(url);
 
-      if (format === 'obj') {
-        return await this.loadOBJModel(url, name);
-      } else {
-        return await this.loadGLTFModel(url, name, format);
-      }
+      if (format === 'obj') return await this.loadOBJModel(url, name);
+      if (format === 'ifc') return await this.loadIFCModel(url, name);
+      return await this.loadGLTFModel(url, name, format);
     } catch (error) {
       console.error(`Failed to load model ${name}:`, error);
       throw error;
@@ -158,23 +169,94 @@ export class ModelManager {
     }
   }
 
+  private async loadIFCModel(url: string, name: string): Promise<THREE.Object3D> {
+    await this.initIFCLoader();
+    return new Promise((resolve, reject) => {
+      this.ifcLoader.load(
+        url,
+        (ifcModel: any) => {
+          ifcModel.userData.name = name;
+          ifcModel.userData.format = 'ifc';
+
+          if (ifcModel.modelID !== undefined) {
+            this.ifcModelIds.set(name, ifcModel.modelID);
+          }
+
+          const box = new THREE.Box3().setFromObject(ifcModel);
+          const size = box.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+          if (maxDim > 0) {
+            const scale = 2 / maxDim;
+            ifcModel.scale.multiplyScalar(scale);
+            const scaledBox = new THREE.Box3().setFromObject(ifcModel);
+            const center = scaledBox.getCenter(new THREE.Vector3());
+            ifcModel.position.sub(center);
+          }
+
+          this.scene.add(ifcModel);
+          this.models.set(name, ifcModel);
+          resolve(ifcModel);
+        },
+        undefined,
+        reject
+      );
+    });
+  }
+
+  private async loadIFCModelFromFile(name: string, file: File): Promise<THREE.Object3D> {
+    await this.initIFCLoader();
+    const url = URL.createObjectURL(file);
+    return new Promise((resolve, reject) => {
+      this.ifcLoader.load(
+        url,
+        (ifcModel: any) => {
+          URL.revokeObjectURL(url);
+          ifcModel.userData.name = name;
+          ifcModel.userData.format = 'ifc';
+
+          if (ifcModel.modelID !== undefined) {
+            this.ifcModelIds.set(name, ifcModel.modelID);
+          }
+
+          const box = new THREE.Box3().setFromObject(ifcModel);
+          const size = box.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+          if (maxDim > 0) {
+            const scale = 2 / maxDim;
+            ifcModel.scale.multiplyScalar(scale);
+            const scaledBox = new THREE.Box3().setFromObject(ifcModel);
+            const center = scaledBox.getCenter(new THREE.Vector3());
+            ifcModel.position.sub(center);
+          }
+
+          this.scene.add(ifcModel);
+          this.models.set(name, ifcModel);
+          resolve(ifcModel);
+        },
+        undefined,
+        (error: any) => {
+          URL.revokeObjectURL(url);
+          reject(error);
+        }
+      );
+    });
+  }
+
   /**
    * Load a model from File objects (for drag & drop)
    */
   async loadModelFromFiles(name: string, mainFile: File, mtlFile?: File | null): Promise<THREE.Object3D> {
     try {
-      // Detect format from file name
       const fileName = mainFile.name.toLowerCase();
       let format: ModelFormat = 'glb';
       if (fileName.endsWith('.obj')) format = 'obj';
       else if (fileName.endsWith('.gltf')) format = 'gltf';
       else if (fileName.endsWith('.glb')) format = 'glb';
+      else if (fileName.endsWith('.ifc')) format = 'ifc';
 
-      if (format === 'obj') {
-        return await this.loadOBJModelFromFiles(name, mainFile, mtlFile);
-      } else {
-        return await this.loadGLTFModelFromFile(name, mainFile, format);
-      }
+      if (format === 'obj') return await this.loadOBJModelFromFiles(name, mainFile, mtlFile);
+      if (format === 'ifc') return await this.loadIFCModelFromFile(name, mainFile);
+      return await this.loadGLTFModelFromFile(name, mainFile, format);
     } catch (error) {
       console.error(`Failed to load model ${name}:`, error);
       throw error;
@@ -371,6 +453,12 @@ export class ModelManager {
     const model = this.models.get(name);
     if (model) {
       this.scene.remove(model);
+
+      const ifcModelId = this.ifcModelIds.get(name);
+      if (ifcModelId !== undefined) {
+        this.ifcLoader.ifcManager.close(ifcModelId).catch(() => {});
+        this.ifcModelIds.delete(name);
+      }
 
       // Dispose geometries and materials
       model.traverse((child: any) => {

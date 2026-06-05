@@ -14,7 +14,7 @@
     <div v-if="isDragging" class="drop-overlay">
       <div class="drop-hint">
         <p>Drop your 3D model here</p>
-        <small>Supported: .obj (+ .mtl), .glb, .gltf</small>
+        <small>Supported: .obj (+ .mtl), .glb, .gltf, .ifc</small>
       </div>
     </div>
 

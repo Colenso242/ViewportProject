@@ -204,7 +204,7 @@ async function handleDrop(event: DragEvent): Promise<void> {
 
   const fileMap = new Map<string, { [key: string]: File }>();
   for (let file of Array.from(files)) {
-    const baseName = file.name.replace(/\.(obj|mtl|glb|gltf)$/i, '');
+    const baseName = file.name.replace(/\.(obj|mtl|glb|gltf|ifc)$/i, '');
     if (!fileMap.has(baseName)) fileMap.set(baseName, {});
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (ext) fileMap.get(baseName)![ext] = file;
@@ -212,7 +212,7 @@ async function handleDrop(event: DragEvent): Promise<void> {
 
   for (let [, files] of fileMap) {
     try {
-      const mainFile = files.obj || files.glb || files.gltf;
+      const mainFile = files.ifc || files.obj || files.glb || files.gltf;
       if (!mainFile) continue;
 
       sceneStore.setLoading('loading', `Loading ${mainFile.name}...`);

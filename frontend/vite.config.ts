@@ -8,6 +8,9 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3000'
     }
+  },
+  optimizeDeps: {
+    exclude: ['web-ifc-three', 'web-ifc']
   }
 });
 
