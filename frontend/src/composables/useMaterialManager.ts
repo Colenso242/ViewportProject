@@ -58,6 +58,7 @@ export function useMaterialManager(
     model.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh || !mesh.material) return;
+      if (mesh.userData.isSensorPointMarker) return;
 
       const original = mesh.material;
       const ghost = Array.isArray(original) ? original.map(createGhostMaterial) : createGhostMaterial(original);

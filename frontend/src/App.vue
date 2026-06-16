@@ -4,14 +4,16 @@
       :api-status="apiStatus"
       :show-object-tree="showObjectTree"
       :ghosting-enabled="ghostingEnabled"
+      :placement-mode="placementMode"
       @toggle-tree="toggleObjectTree"
       @toggle-ghosting="toggleGhosting"
       @toggle-overview="toggleOverview"
+      @toggle-placement="togglePlacementMode"
     />
 
     <div class="main-container">
-      <div class="viewport-wrapper" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative;">
-        <div class="workspace-row" style="flex: 1; display: flex; overflow: hidden;">
+      <div class="viewport-wrapper">
+        <div class="workspace-row">
           <ObjectTree
             v-if="showObjectTree"
             :object-tree-items="objectTreeItems"
@@ -22,7 +24,8 @@
           <Viewport3D
             ref="viewportComponent"
             :is-dragging="isDragging"
-            style="flex: 1; position: relative"
+            :has-model="!!currentModel"
+            :placement-mode="placementMode"
             @drag-over="isDragging = true"
             @drag-leave="isDragging = false"
             @drop="handleDrop"
@@ -44,13 +47,17 @@
                 :currentModel="currentModel"
                 :sensorMappings="sensorMappings"
                 :sensorData="sensorData"
+                :pointSensors="pointSensors"
+                :getPointWorldPosition="getPointWorldPosition"
               />
 
               <!-- Floating Overlay Dashboard -->
               <div v-if="selectedSensorId && !showOverview" class="floating-dashboard-overlay">
                 <div class="floating-header">
-                  <span>Sensor: {{ selectedSensorId }}</span>
-                  <button @click="deselectObject" class="close-overlay">✕</button>
+                  <span>Sensor <span class="sensor-tag">{{ selectedSensorId }}</span></span>
+                  <button @click="deselectObject" class="icon-btn danger-hover" title="Close">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  </button>
                 </div>
                 <TimeseriesDashboard :sensorId="selectedSensorId" />
               </div>
@@ -77,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, computed, ComponentPublicInstance } from 'vue';
+import { onBeforeUnmount, onMounted, ref, computed, watch, ComponentPublicInstance } from 'vue';
 import * as THREE from 'three';
 import Toolbar from './components/viewport/Toolbar.vue';
 import ObjectTree from './components/viewport/ObjectTree.vue';
@@ -97,17 +104,21 @@ import { useRaycaster } from './composables/useRaycaster';
 import { useMaterialManager } from './composables/useMaterialManager';
 import { storeToRefs } from 'pinia';
 import { ApiService } from './services/ApiService';
+import { SensorPointMarkers } from './utils/SensorPointMarkers';
+import type { SensorPoint } from './types';
 
 const viewportComponent = ref<ComponentPublicInstance | null>(null);
 
 const sensorStore = useSensorStore();
 const sceneStore = useSceneStore();
 
-const { sensorData, sensorsInfo, sensorMappings } = storeToRefs(sensorStore);
+const { sensorData, sensorsInfo, sensorMappings, pointSensors } = storeToRefs(sensorStore);
 const {
-  showObjectTree, showOverview, ghostingEnabled, isDragging,
+  showObjectTree, showOverview, ghostingEnabled, isDragging, placementMode,
   loadingStatus, selectedObject, hoveredObject, currentModel
 } = storeToRefs(sceneStore);
+
+const pointMarkers = new SensorPointMarkers();
 
 const apiStatus = ref<string>('checking...');
 
@@ -115,7 +126,7 @@ const {
   initThree, startAnimationLoop, stopAnimationLoop, fitCameraToModel, cameraRef, getScene, getModelManager
 } = useThreeScene();
 
-const { pickObject } = useRaycaster(cameraRef, currentModel);
+const { pickObject, pickIntersection } = useRaycaster(cameraRef, currentModel);
 
 const {
   buildInteractionMaterials, clearInteractionMaterials, applyInteractionMaterials
@@ -159,8 +170,47 @@ function toggleOverview(): void {
   sceneStore.toggleOverview();
 }
 
+function togglePlacementMode(): void {
+  sceneStore.togglePlacementMode();
+}
+
+function getPointWorldPosition(placementId: string, target: THREE.Vector3): THREE.Vector3 | null {
+  return pointMarkers.getWorldPosition(placementId, target);
+}
+
+function placeSensorPoint(worldPoint: THREE.Vector3): void {
+  const model = currentModel.value;
+  if (!model || !sceneStore.currentModelId) return;
+
+  const local = model.worldToLocal(worldPoint.clone());
+  const point: SensorPoint = {
+    placementId: crypto.randomUUID(),
+    modelId: sceneStore.currentModelId,
+    sensorId: '',
+    position: { x: local.x, y: local.y, z: local.z }
+  };
+
+  sceneStore.placementMode = false;
+  void sensorStore.addPointSensor(point);
+  pointMarkers.sync(pointSensors.value);
+
+  // Select the new marker so the properties panel opens with the sensor picker.
+  const marker = pointMarkers.getMarker(point.placementId);
+  if (marker) selectObject(marker);
+}
+
 function handleViewportClick(event: MouseEvent): void {
-  const hit = pickObject(event, (viewportComponent.value as any)?.viewportElement);
+  const viewportEl = (viewportComponent.value as any)?.viewportElement;
+
+  if ((placementMode.value || event.shiftKey) && currentModel.value) {
+    const intersection = pickIntersection(event, viewportEl);
+    if (intersection && !intersection.object.userData.isSensorPointMarker) {
+      placeSensorPoint(intersection.point);
+      return;
+    }
+  }
+
+  const hit = pickObject(event, viewportEl);
   if (hit) selectObject(hit);
   else deselectObject();
 }
@@ -211,22 +261,36 @@ async function handleDrop(event: DragEvent): Promise<void> {
   }
 
   for (let [, files] of fileMap) {
+    const manager = getModelManager();
     try {
       const mainFile = files.ifc || files.obj || files.glb || files.gltf;
       if (!mainFile) continue;
 
       sceneStore.setLoading('loading', `Loading ${mainFile.name}...`);
+      manager.onImportProgress = (percent, stage) => {
+        const verb = stage === 'parse' ? 'Parsing' : 'Reading';
+        sceneStore.setLoading('loading', `${verb} ${mainFile.name}… ${percent}%`);
+      };
 
       if (currentModel.value) {
+        pointMarkers.detach();
         clearInteractionMaterials();
-        getModelManager().removeModel('dropped-model');
+        manager.removeModel('dropped-model');
         getScene().remove(currentModel.value);
         currentModel.value = null;
       }
 
-      const model = await getModelManager().loadModelFromFiles('dropped-model', mainFile, files.mtl);
+      const model = await manager.loadModelFromFiles('dropped-model', mainFile, files.mtl);
+      manager.onImportProgress = null;
       currentModel.value = model;
       buildInteractionMaterials(model);
+
+      // Stable per-file identifier; keys the persisted sensor placements.
+      const modelId = `${mainFile.name}:${mainFile.size}`;
+      sceneStore.currentModelId = modelId;
+      pointMarkers.attach(model);
+      await sensorStore.loadPointSensors(modelId);
+      pointMarkers.sync(pointSensors.value);
 
       sceneStore.setLoading('success', `Loaded: ${mainFile.name}`);
       setTimeout(() => sceneStore.setLoading(null), 2000);
@@ -235,6 +299,7 @@ async function handleDrop(event: DragEvent): Promise<void> {
       deselectObject();
       break;
     } catch (error) {
+      manager.onImportProgress = null;
       sceneStore.setLoading('error', `Failed: ${error}`);
       setTimeout(() => sceneStore.setLoading(null), 3000);
     }
@@ -244,6 +309,17 @@ async function handleDrop(event: DragEvent): Promise<void> {
 function onFrame() {
   applyInteractionMaterials(hoveredObject.value, selectedObject.value);
 }
+
+watch(pointSensors, (points) => {
+  pointMarkers.sync(points);
+
+  // Deselect markers whose placement was removed.
+  const selected = selectedObject.value;
+  const selectedPointId = selected?.userData.sensorPointId;
+  if (selectedPointId && !points.some(p => p.placementId === selectedPointId)) {
+    deselectObject();
+  }
+});
 
 onMounted(() => {
   sensorStore.loadMappings();
@@ -259,60 +335,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopAnimationLoop();
   clearInteractionMaterials();
+  pointMarkers.dispose();
 });
 
 </script>
-
-<style>
-.app-shell {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-.main-container {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-}
-
-.viewport-wrapper {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  position: relative;
-}
-
-.workspace-row {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-}
-
-.floating-dashboard-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 16px;
-  border-top: 1px solid #333;
-  z-index: 10;
-}
-
-.floating-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.close-overlay {
-  background: transparent;
-  border: none;
-  color: white;
-  cursor: pointer;
-  font-size: 18px;
-}
-</style>

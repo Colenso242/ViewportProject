@@ -41,36 +41,36 @@ const materialType = computed(() => {
 <style scoped>
 .prop-group {
   padding: 1rem;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--border);
 }
 
 .prop-group h3 {
   margin: 0 0 0.75rem 0;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 700;
   text-transform: uppercase;
-  color: #94a3b8;
-  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  letter-spacing: 0.07em;
 }
 
 .prop-row {
   display: flex;
   justify-content: space-between;
   margin: 0.25rem 0;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
 }
 
 .prop-label {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .prop-value {
-  color: #e2e8f0;
-  font-family: inherit;
+  color: var(--text);
 }
 
 .empty-state {
-  color: #64748b;
-  font-size: 0.875rem;
+  color: var(--text-faint);
+  font-size: 0.85rem;
 }
 </style>
 

@@ -1,5 +1,8 @@
 <template>
   <div v-if="loadingStatus" class="loading-indicator" :class="loadingStatus.type">
+    <span v-if="loadingStatus.type === 'loading'" class="spinner"></span>
+    <svg v-else-if="loadingStatus.type === 'success'" class="status-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+    <svg v-else class="status-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
     <p>{{ loadingStatus.message }}</p>
   </div>
 </template>
@@ -20,12 +23,21 @@ defineProps<{
   position: fixed;
   bottom: 1rem;
   right: 1rem;
-  padding: 1rem 1.5rem;
-  border-radius: 0.5rem;
-  color: white;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 1.1rem;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-left-width: 3px;
+  color: var(--text);
   font-weight: 500;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-lg);
   animation: slideIn 0.3s ease;
-  z-index: 20;
+  z-index: 1000;
+  max-width: 360px;
 }
 
 .loading-indicator p {
@@ -33,15 +45,41 @@ defineProps<{
 }
 
 .loading-indicator.loading {
-  background: #3b82f6;
+  border-left-color: var(--accent);
 }
 
 .loading-indicator.success {
-  background: #10b981;
+  border-left-color: var(--success);
+}
+
+.loading-indicator.success .status-icon {
+  color: var(--success);
 }
 
 .loading-indicator.error {
-  background: #ef4444;
+  border-left-color: var(--danger);
+}
+
+.loading-indicator.error .status-icon {
+  color: var(--danger);
+}
+
+.status-icon {
+  flex-shrink: 0;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes slideIn {
@@ -55,4 +93,3 @@ defineProps<{
   }
 }
 </style>
-

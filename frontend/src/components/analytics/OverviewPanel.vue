@@ -2,7 +2,9 @@
   <div class="overview-overlay">
     <div class="overview-header">
       <h2>System Overview Analytics</h2>
-      <button class="close-btn" @click="$emit('close')" title="Close Overview">✕</button>
+      <button class="icon-btn danger-hover" @click="$emit('close')" title="Close Overview">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
     </div>
 
     <div class="overview-content">
@@ -12,7 +14,7 @@
         <div class="widget timeseries-widget">
           <h3>Key Sensor Trend</h3>
           <div class="widget-body">
-            <select v-model="selectedWidgetSensor" class="widget-dropdown">
+            <select v-model="selectedWidgetSensor" class="select-control widget-dropdown">
               <option v-for="sensor in sensorsInfo" :key="sensor.id" :value="sensor.id">
                 {{ sensor.id }}
               </option>
@@ -37,7 +39,7 @@
         <div class="widget gauge-widget">
           <h3>Sensor Gauge</h3>
           <div class="widget-body">
-            <select v-model="selectedGaugeSensor" class="widget-dropdown">
+            <select v-model="selectedGaugeSensor" class="select-control widget-dropdown">
               <option v-for="sensor in sensorsInfo" :key="sensor.id" :value="sensor.id">
                 {{ sensor.id }}
               </option>
@@ -99,7 +101,7 @@ watch(sensorsInfo, (info) => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: #0f172a;
+  background: var(--bg);
   z-index: 500;
   display: flex;
   flex-direction: column;
@@ -109,41 +111,29 @@ watch(sensorsInfo, (info) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 2rem;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  padding: 0.85rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .overview-header h2 {
   margin: 0;
-  font-size: 1.5rem;
-  color: #f8fafc;
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  font-size: 1.5rem;
-  color: #94a3b8;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.close-btn:hover {
-  color: #ef4444;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .overview-content {
   flex: 1;
-  padding: 2rem;
+  padding: 1.5rem;
   overflow-y: auto;
 }
 
 .widgets-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 2rem;
+  gap: 1.25rem;
   grid-auto-rows: minmax(300px, 400px);
 }
 
@@ -159,20 +149,39 @@ watch(sensorsInfo, (info) => {
 }
 
 .widget {
-  background: #1e293b;
-  border-radius: 8px;
-  border: 1px solid #334155;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.widget:hover {
+  border-color: var(--border-strong);
 }
 
 .widget h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin: 0;
-  padding: 1rem;
-  background: #334155;
-  font-size: 1.1rem;
-  color: #e2e8f0;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+
+.widget h3::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .widget-body {
@@ -185,11 +194,6 @@ watch(sensorsInfo, (info) => {
 
 .widget-dropdown {
   margin-bottom: 1rem;
-  padding: 0.5rem;
-  background: #0f172a;
-  border: 1px solid #475569;
-  color: white;
-  border-radius: 4px;
 }
 
 .chart-wrapper {
@@ -210,7 +214,7 @@ watch(sensorsInfo, (info) => {
 .center-content {
   justify-content: center;
   align-items: center;
-  color: #64748b;
+  color: var(--text-faint);
   text-align: center;
 }
 </style>

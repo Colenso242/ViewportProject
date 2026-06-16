@@ -5,7 +5,7 @@ export function useRaycaster(cameraRef: Ref<THREE.PerspectiveCamera | null>, cur
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
 
-  function pickObject(event: MouseEvent, viewportEl: HTMLElement | undefined | null): THREE.Object3D | null {
+  function pickIntersection(event: MouseEvent, viewportEl: HTMLElement | undefined | null): THREE.Intersection | null {
     if (!viewportEl || !currentModel.value || !cameraRef.value) return null;
 
     const rect = viewportEl.getBoundingClientRect();
@@ -14,9 +14,13 @@ export function useRaycaster(cameraRef: Ref<THREE.PerspectiveCamera | null>, cur
     raycaster.setFromCamera(mouse, cameraRef.value);
 
     const intersects = raycaster.intersectObject(currentModel.value, true);
-    return intersects[0]?.object ?? null;
+    return intersects[0] ?? null;
   }
 
-  return { pickObject };
+  function pickObject(event: MouseEvent, viewportEl: HTMLElement | undefined | null): THREE.Object3D | null {
+    return pickIntersection(event, viewportEl)?.object ?? null;
+  }
+
+  return { pickObject, pickIntersection };
 }
 

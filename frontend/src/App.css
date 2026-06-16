@@ -1,19 +1,199 @@
+/* ---------------------------------- */
+/* Design tokens                      */
+/* ---------------------------------- */
+
+:root {
+  /* Surfaces */
+  --bg: #0b1120;
+  --surface: #121a2b;
+  --surface-2: #1a2436;
+  --surface-3: #223049;
+
+  /* Borders */
+  --border: #263247;
+  --border-strong: #344361;
+
+  /* Text */
+  --text: #e6ecf5;
+  --text-muted: #8da2bd;
+  --text-faint: #5d7290;
+
+  /* Accents */
+  --accent: #4f8ff7;
+  --accent-strong: #2f6fe0;
+  --accent-soft: rgba(79, 143, 247, 0.14);
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.15);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.15);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.15);
+
+  /* Shape & depth */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  /* Typography */
+  --font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, "SF Mono", monospace;
+
+  accent-color: var(--accent);
+  color-scheme: dark;
+}
+
+/* ---------------------------------- */
+/* Base                               */
+/* ---------------------------------- */
+
 * {
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #0f172a;
-  color: #f8fafc;
+html {
+  background: var(--bg);
 }
 
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Slim, theme-matched scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+button,
+select,
+input {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* ---------------------------------- */
+/* Shared controls                    */
+/* ---------------------------------- */
+
+.select-control {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.select-control:hover,
+.select-control:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.icon-btn.danger-hover:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* Status badges (OK / WARNING / CRITICAL) */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.status-badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-badge.ok {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.status-badge.warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.status-badge.critical {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ---------------------------------- */
+/* App layout                         */
+/* ---------------------------------- */
+
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 0;
 }
 
 .main-container {
@@ -24,47 +204,51 @@ body {
   flex-direction: column;
 }
 
-.bottom-dashboard {
-  height: 250px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background-color: #0f172a;
-  z-index: 10;
+.viewport-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  position: relative;
+  overflow: hidden;
 }
 
+.workspace-row {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Floating per-sensor dashboard over the viewport */
 .floating-dashboard-overlay {
   position: absolute;
   bottom: 20px;
   left: 20px;
-  width: 450px;
-  height: 300px;
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(4px);
-  border: 1px solid #334155;
-  border-radius: 8px;
+  width: 460px;
+  height: 320px;
+  background: rgba(11, 17, 32, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
   z-index: 100;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
 }
 
 .floating-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 1rem;
-  background: #1e293b;
-  border-bottom: 1px solid #334155;
-  font-weight: bold;
+  padding: 0.5rem 0.75rem 0.5rem 1rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
-.close-overlay {
-  background: transparent;
-  border: none;
-  font-size: 1.2rem;
-  color: #94a3b8;
-  cursor: pointer;
-}
-.close-overlay:hover {
-  color: #ef4444;
+.floating-header .sensor-tag {
+  color: var(--accent);
+  font-family: var(--font-mono);
 }

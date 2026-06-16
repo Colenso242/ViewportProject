@@ -26,42 +26,50 @@ defineProps<{
   position: absolute;
   bottom: 1rem;
   left: 1rem;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 0.5rem;
+  background: rgba(11, 17, 32, 0.88);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
   overflow: hidden;
   max-width: 300px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
   z-index: 15;
 }
 
 .hover-overview {
-  opacity: 0.9;
   pointer-events: none;
 }
 
 .hint {
-  color: #94a3b8;
+  color: var(--text-faint);
   font-style: italic;
   margin-top: 0.5rem !important;
+  font-size: 0.78rem !important;
 }
 
 .info-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
-  background: #334155;
-  border-bottom: 1px solid #334155;
+  padding: 0.55rem 0.85rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
 }
 
 .info-content {
-  padding: 1rem;
+  padding: 0.75rem 0.85rem;
 }
 
 .info-content p {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.875rem;
+  margin: 0 0 0.25rem 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.info-content p strong {
+  color: var(--text);
+  font-weight: 600;
 }
 </style>
 

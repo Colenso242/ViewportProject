@@ -50,8 +50,9 @@ const updateGaugeOption = () => {
       left: 'center',
       top: 'bottom',
       textStyle: {
-        fontSize: 14,
-        color: '#e2e8f0'
+        fontSize: 13,
+        color: '#e6ecf5',
+        fontWeight: 600
       }
     },
     tooltip: {
@@ -70,29 +71,29 @@ const updateGaugeOption = () => {
           lineStyle: {
             width: 30,
             color: [
-              [thresholdPos, '#22c55e'],
+              [thresholdPos, '#34d399'],
               [warningPos, '#fbbf24'],
-              [1, '#ef4444']
+              [1, '#f87171']
             ]
           }
         },
         pointer: {
           itemStyle: {
-            color: isCritical ? '#ef4444' : '#64748b'
+            color: isCritical ? '#f87171' : '#8da2bd'
           }
         },
         axisLabel: {
-          color: '#94a3b8',
+          color: '#8da2bd',
           fontSize: 10
         },
         splitLine: {
           lineStyle: {
-            color: '#334155'
+            color: '#344361'
           }
         },
         detail: {
           textStyle: {
-            color: isCritical ? '#ef4444' : '#e2e8f0',
+            color: isCritical ? '#f87171' : '#e6ecf5',
             fontSize: 20,
             fontWeight: 'bold'
           },
@@ -125,8 +126,6 @@ watch([liveReading, sensorConfig], () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-  border-radius: 8px;
   padding: 1rem;
 }
 

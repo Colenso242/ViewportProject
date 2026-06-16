@@ -4,6 +4,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { App } from './app';
 import DatabaseService from './services/DatabaseService';
 import { SensorService } from './services/SensorService';
+import { PlacementService } from './services/PlacementService';
 import { ChangeStreamService } from './services/ChangeStreamService';
 import { SensorSocketHandler } from './sockets/SensorSocketHandler';
 import { serverConfig } from './config/server';
@@ -14,6 +15,7 @@ class ServerBootstrap {
   private io: SocketIOServer;
   private services: {
     sensorService?: SensorService;
+    placementService?: PlacementService;
     changeStreamService?: ChangeStreamService;
   } = {};
 
@@ -37,9 +39,10 @@ class ServerBootstrap {
 
     const sensorReadingsCollection = DatabaseService.getSensorReadingsCollection();
     this.services.sensorService = new SensorService(sensorReadingsCollection);
+    this.services.placementService = new PlacementService(DatabaseService.getSensorPlacementsCollection());
 
-    // Inject service to App for routes setup
-    this.application.setSensorService(this.services.sensorService);
+    // Inject services to App for routes setup
+    this.application.setServices(this.services.sensorService, this.services.placementService);
 
     this.services.changeStreamService = new ChangeStreamService(
       sensorReadingsCollection,

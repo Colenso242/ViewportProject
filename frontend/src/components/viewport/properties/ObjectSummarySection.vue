@@ -36,13 +36,14 @@ defineEmits<{
 <style scoped>
 .prop-group {
   padding: 1rem;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--border);
 }
 
 .header-group h3 {
   margin: 0 0 0.75rem 0;
-  font-size: 1.1rem;
-  color: #60a5fa;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent);
   word-break: break-all;
 }
 
@@ -50,29 +51,29 @@ defineEmits<{
   display: flex;
   justify-content: space-between;
   margin: 0.25rem 0;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
 }
 
 .toggle-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   cursor: pointer;
   margin-top: 0.75rem;
 }
 
 .prop-label {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .prop-value {
-  color: #e2e8f0;
-  font-family: inherit;
+  color: var(--text);
 }
 
 .uuid-val {
-  font-family: monospace;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
   cursor: help;
 }
 </style>

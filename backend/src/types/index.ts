@@ -25,12 +25,23 @@ export interface SensorData {
   timestamp?: Date;
 }
 
+export interface SensorPlacement {
+  _id?: any;
+  placementId: string;
+  modelId: string;
+  sensorId: string;
+  position: { x: number; y: number; z: number };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface DatabaseConfig {
   MONGO_URI: string;
   DB_NAME: string;
   COLLECTIONS: {
     SENSOR_READINGS: string;
     SENSOR_READINGS_LIVE: string;
+    SENSOR_PLACEMENTS: string;
   };
 }
 

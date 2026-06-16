@@ -1,11 +1,12 @@
 import { MongoClient, Db, Collection } from 'mongodb';
 import { databaseConfig } from '../config/database';
-import { SensorReading } from '../types';
+import { SensorReading, SensorPlacement } from '../types';
 
 class DatabaseService {
   private client: MongoClient | null = null;
   private db: Db | null = null;
   private sensorReadingsCollection: Collection<SensorReading> | null = null;
+  private sensorPlacementsCollection: Collection<SensorPlacement> | null = null;
 
   async connect(): Promise<boolean> {
     try {
@@ -31,6 +32,16 @@ class DatabaseService {
     this.sensorReadingsCollection = this.db.collection<SensorReading>(
       databaseConfig.COLLECTIONS.SENSOR_READINGS
     );
+
+    this.sensorPlacementsCollection = this.db.collection<SensorPlacement>(
+      databaseConfig.COLLECTIONS.SENSOR_PLACEMENTS
+    );
+    this.sensorPlacementsCollection.createIndex({ modelId: 1 }).catch((error) => {
+      console.error('Failed to create sensor placements index:', error);
+    });
+    this.sensorPlacementsCollection.createIndex({ placementId: 1 }, { unique: true }).catch((error) => {
+      console.error('Failed to create sensor placements unique index:', error);
+    });
   }
 
   getSensorReadingsCollection(): Collection<SensorReading> {
@@ -38,6 +49,13 @@ class DatabaseService {
       throw new Error('Sensor readings collection not initialized');
     }
     return this.sensorReadingsCollection;
+  }
+
+  getSensorPlacementsCollection(): Collection<SensorPlacement> {
+    if (!this.sensorPlacementsCollection) {
+      throw new Error('Sensor placements collection not initialized');
+    }
+    return this.sensorPlacementsCollection;
   }
 
   async disconnect(): Promise<void> {

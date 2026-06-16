@@ -56,19 +56,49 @@ const fetchHistoricalData = async () => {
 
 const updateChartOptions = () => {
   chartOption.value = {
-    title: { text: `Sensor: ${props.sensorId}` },
-    tooltip: { trigger: 'axis' },
+    backgroundColor: 'transparent',
+    textStyle: { fontFamily: 'inherit' },
+    title: {
+      text: `Sensor: ${props.sensorId}`,
+      textStyle: { color: '#e6ecf5', fontSize: 13, fontWeight: 600 }
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1a2436',
+      borderColor: '#344361',
+      textStyle: { color: '#e6ecf5' }
+    },
+    grid: { left: 50, right: 16, top: 40, bottom: 60 },
     xAxis: {
       type: 'time',
-      splitLine: { show: false }
+      splitLine: { show: false },
+      axisLine: { lineStyle: { color: '#344361' } },
+      axisLabel: { color: '#8da2bd' }
     },
     yAxis: {
       type: 'value',
-      boundaryGap: [0, '100%']
+      boundaryGap: [0, '100%'],
+      splitLine: { lineStyle: { color: '#263247' } },
+      axisLabel: { color: '#8da2bd' }
     },
     dataZoom: [
       { type: 'inside', start: 0, end: 100 },
-      { start: 0, end: 100 }
+      {
+        start: 0,
+        end: 100,
+        height: 24,
+        bottom: 8,
+        borderColor: '#344361',
+        backgroundColor: 'transparent',
+        fillerColor: 'rgba(79, 143, 247, 0.15)',
+        handleStyle: { color: '#4f8ff7' },
+        moveHandleStyle: { color: '#344361' },
+        textStyle: { color: '#8da2bd' },
+        dataBackground: {
+          lineStyle: { color: '#344361' },
+          areaStyle: { color: 'rgba(52, 67, 97, 0.3)' }
+        }
+      }
     ],
     series: [
       {
@@ -76,7 +106,18 @@ const updateChartOptions = () => {
         type: 'line',
         showSymbol: false,
         data: chartData.value,
-        itemStyle: { color: 'rgb(0, 153, 255)' }
+        lineStyle: { color: '#4f8ff7', width: 2 },
+        itemStyle: { color: '#4f8ff7' },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(79, 143, 247, 0.25)' },
+              { offset: 1, color: 'rgba(79, 143, 247, 0)' }
+            ]
+          }
+        }
       }
     ]
   };
@@ -113,10 +154,7 @@ watch(() => props.sensorId, fetchHistoricalData, { immediate: true });
   width: 100%;
   height: 100%;
   min-height: 250px;
-  background: white;
-  border-radius: 8px;
   padding: 10px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
   display: flex;
   flex-direction: column;
 }
@@ -129,6 +167,6 @@ watch(() => props.sensorId, fetchHistoricalData, { immediate: true });
   justify-content: center;
   align-items: center;
   height: 100%;
-  color: #666;
+  color: var(--text-muted);
 }
 </style>

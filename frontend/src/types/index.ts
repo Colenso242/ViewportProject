@@ -19,3 +19,15 @@ export interface SensorConfig {
   threshold: number;
 }
 
+/**
+ * A sensor anchored to an arbitrary point on a model.
+ * The position is stored in model-local coordinates so it stays valid
+ * across reloads (world transforms are recomputed deterministically per file).
+ */
+export interface SensorPoint {
+  placementId: string;
+  modelId: string;
+  sensorId: string;
+  position: { x: number; y: number; z: number };
+}
+

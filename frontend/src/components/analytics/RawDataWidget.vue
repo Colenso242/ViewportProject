@@ -1,7 +1,7 @@
 <template>
   <div class="raw-data-widget">
     <div class="widget-header">
-      <select v-model="selectedSensor" class="sensor-select">
+      <select v-model="selectedSensor" class="select-control">
         <option v-for="sensor in sensorsInfo" :key="sensor.id" :value="sensor.id">
           {{ sensor.id }}
         </option>
@@ -38,9 +38,9 @@
         <div class="data-row">
           <span class="label">Status:</span>
           <span class="value">
-            <span v-if="selectedSensorData.isCritical" class="badge critical">🔴 CRITICAL</span>
-            <span v-else-if="selectedSensorData.isWarning" class="badge warning">🟡 WARNING</span>
-            <span v-else class="badge ok">🟢 OK</span>
+            <span v-if="selectedSensorData.isCritical" class="status-badge critical">CRITICAL</span>
+            <span v-else-if="selectedSensorData.isWarning" class="status-badge warning">WARNING</span>
+            <span v-else class="status-badge ok">OK</span>
           </span>
         </div>
       </div>
@@ -82,15 +82,6 @@ const selectedSensorData = computed(() => {
   margin-bottom: 1rem;
 }
 
-.sensor-select {
-  width: 100%;
-  padding: 0.5rem;
-  background: #0f172a;
-  border: 1px solid #475569;
-  color: white;
-  border-radius: 4px;
-}
-
 .widget-content {
   flex: 1;
   display: flex;
@@ -103,10 +94,10 @@ const selectedSensorData = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--bg);
   padding: 1rem;
-  border-radius: 6px;
-  border: 1px solid #334155;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
 }
 
 .data-row {
@@ -114,7 +105,7 @@ const selectedSensorData = computed(() => {
   justify-content: space-between;
   align-items: center;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border);
 }
 
 .data-row:last-child {
@@ -123,70 +114,26 @@ const selectedSensorData = computed(() => {
 }
 
 .label {
-  color: #94a3b8;
-  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
 }
 
 .value {
-  color: #f8fafc;
-  font-family: inherit;
+  color: var(--text);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .value.critical {
-  color: #ef4444;
+  color: var(--danger);
 }
 
 .value.warning {
-  color: #fbbf24;
-}
-
-.badge {
-  padding: 0.2rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: bold;
-}
-
-.badge.ok {
-  background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
-}
-
-.badge.warning {
-  background: rgba(251, 191, 36, 0.2);
-  color: #fbbf24;
-}
-
-.badge.critical {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-}
-
-.json-view details {
-  background: #0f172a;
-  border: 1px dashed #334155;
-  border-radius: 4px;
-}
-
-.json-view summary {
-  padding: 0.5rem;
-  cursor: pointer;
-  color: #60a5fa;
-  font-size: 0.875rem;
-  outline: none;
-}
-
-.json-view pre {
-  margin: 0;
-  padding: 0.5rem;
-  font-size: 0.75rem;
-  color: #a7f3d0;
-  overflow-x: auto;
+  color: var(--warning);
 }
 
 .empty-state {
-  color: #64748b;
+  color: var(--text-faint);
   text-align: center;
   padding: 2rem;
 }

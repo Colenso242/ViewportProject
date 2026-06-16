@@ -7,6 +7,9 @@ export const useSceneStore = defineStore('sceneStore', () => {
   const showOverview = ref<boolean>(false);
   const ghostingEnabled = ref<boolean>(true);
   const isDragging = ref<boolean>(false);
+  const placementMode = ref<boolean>(false);
+  // Stable identifier of the loaded model (file name + size); keys sensor placements.
+  const currentModelId = ref<string>('');
 
   const loadingStatus = ref<{ type: 'loading' | 'success' | 'error'; message: string } | null>(null);
 
@@ -35,11 +38,17 @@ export const useSceneStore = defineStore('sceneStore', () => {
     showOverview.value = !showOverview.value;
   }
 
+  function togglePlacementMode() {
+    placementMode.value = !placementMode.value;
+  }
+
   return {
     showObjectTree,
     showOverview,
     ghostingEnabled,
     isDragging,
+    placementMode,
+    currentModelId,
     loadingStatus,
     selectedObject,
     hoveredObject,
@@ -47,7 +56,8 @@ export const useSceneStore = defineStore('sceneStore', () => {
     setLoading,
     toggleObjectTree,
     toggleGhosting,
-    toggleOverview
+    toggleOverview,
+    togglePlacementMode
   };
 });
 

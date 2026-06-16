@@ -8,8 +8,7 @@
       :style="{ left: `${item.x}px`, top: `${item.y}px`, transform: `translate(-50%, -50%)` }"
       v-show="item.visible"
     >
-      <div v-if="item.data?.isCritical" class="warning-icon">🔴</div>
-      <div v-else-if="item.data?.isWarning" class="warning-icon">🟡</div>
+      <span class="state-dot" :class="{ critical: item.data?.isCritical, warning: item.data?.isWarning && !item.data?.isCritical }"></span>
       <div class="sensor-info">
         <span class="sensor-id">{{ item.sensorId }}</span>
         <span v-if="item.data" class="sensor-val">
@@ -23,6 +22,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import * as THREE from 'three';
+import type { SensorPoint } from '../../types';
 
 const props = defineProps<{
   camera: THREE.Camera | null;
@@ -30,6 +30,8 @@ const props = defineProps<{
   currentModel: THREE.Object3D | null;
   sensorMappings: Record<string, string>;
   sensorData: Record<string, any>;
+  pointSensors?: SensorPoint[];
+  getPointWorldPosition?: (placementId: string, target: THREE.Vector3) => THREE.Vector3 | null;
 }>();
 
 interface MappedSensor {
@@ -103,28 +105,41 @@ function updatePositions() {
 
   const newPositions: Record<string, { x: number, y: number, visible: boolean }> = {};
 
-  for (const [uuid, sensorId] of Object.entries(props.sensorMappings)) {
-    if (!sensorId) continue;
-
-    const pos = getMeshWorldPosition(uuid);
-    if (!pos) continue;
-
+  const projectToScreen = (key: string, pos: THREE.Vector3) => {
     // Project 3D vector to 2D screen coordinate
-    pos.project(props.camera);
+    pos.project(props.camera!);
 
     // After projection, NDC z must stay within [-1, 1] to be inside the
     // camera's near/far clipping planes.
     const isOutsideDepthRange = pos.z < -1 || pos.z > 1;
     if (isOutsideDepthRange) {
-      newPositions[uuid] = { x: 0, y: 0, visible: false };
-      continue;
+      newPositions[key] = { x: 0, y: 0, visible: false };
+      return;
     }
 
-    newPositions[uuid] = {
+    newPositions[key] = {
       x: (pos.x * widthHalf) + widthHalf,
       y: -(pos.y * heightHalf) + heightHalf,
       visible: true
     };
+  };
+
+  for (const [uuid, sensorId] of Object.entries(props.sensorMappings)) {
+    if (!sensorId) continue;
+
+    const pos = getMeshWorldPosition(uuid);
+    if (!pos) continue;
+    projectToScreen(uuid, pos);
+  }
+
+  if (props.pointSensors && props.getPointWorldPosition) {
+    const worldPos = new THREE.Vector3();
+    for (const point of props.pointSensors) {
+      if (!point.sensorId) continue;
+      const pos = props.getPointWorldPosition(point.placementId, worldPos);
+      if (!pos) continue;
+      projectToScreen(`point:${point.placementId}`, pos.clone());
+    }
   }
 
   projectedPositions.value = newPositions;
@@ -140,7 +155,7 @@ onBeforeUnmount(() => {
 });
 
 const mappedSensors = computed<MappedSensor[]>(() => {
-  return Object.entries(props.sensorMappings)
+  const objectBadges = Object.entries(props.sensorMappings)
     .filter(([_, sensorId]) => !!sensorId)
     .map(([uuid, sensorId]) => {
       const pos = projectedPositions.value[uuid] || { x: 0, y: 0, visible: false };
@@ -153,6 +168,23 @@ const mappedSensors = computed<MappedSensor[]>(() => {
         data: props.sensorData[sensorId]
       };
     });
+
+  const pointBadges = (props.pointSensors || [])
+    .filter(point => !!point.sensorId)
+    .map(point => {
+      const key = `point:${point.placementId}`;
+      const pos = projectedPositions.value[key] || { x: 0, y: 0, visible: false };
+      return {
+        uuid: key,
+        sensorId: point.sensorId,
+        x: pos.x,
+        y: pos.y,
+        visible: pos.visible,
+        data: props.sensorData[point.sensorId]
+      };
+    });
+
+  return [...objectBadges, ...pointBadges];
 });
 
 </script>
@@ -176,28 +208,47 @@ const mappedSensors = computed<MappedSensor[]>(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid #334155;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(4px);
+  background: rgba(11, 17, 32, 0.85);
+  border: 1px solid var(--border-strong);
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(6px);
   will-change: transform;
   font-size: 0.75rem;
-  color: #f8fafc;
+  color: var(--text);
   transition: opacity 0.2s;
 }
 
 .sensor-badge.is-critical {
-  border-color: #ef4444;
+  border-color: var(--danger);
   background: rgba(127, 29, 29, 0.9);
   animation: pulse-critical 1.5s infinite;
 }
 
 .sensor-badge.is-warning {
-  border-color: #fbbf24;
+  border-color: var(--warning);
   background: rgba(120, 53, 15, 0.9);
   animation: pulse-warning 2s infinite;
+}
+
+.state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--success);
+  box-shadow: 0 0 5px var(--success);
+}
+
+.state-dot.warning {
+  background: var(--warning);
+  box-shadow: 0 0 5px var(--warning);
+}
+
+.state-dot.critical {
+  background: var(--danger);
+  box-shadow: 0 0 5px var(--danger);
 }
 
 @keyframes pulse-critical {
@@ -212,26 +263,22 @@ const mappedSensors = computed<MappedSensor[]>(() => {
   100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
 }
 
-.warning-icon {
-  color: #ef4444;
-  font-weight: bold;
-  font-size: 0.875rem;
-}
-
 .sensor-info {
   display: flex;
   flex-direction: column;
 }
 
 .sensor-id {
-  color: #94a3b8;
-  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.62rem;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .sensor-val {
-  font-weight: bold;
-  font-family: monospace;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
 }
 </style>
 

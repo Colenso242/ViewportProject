@@ -8,6 +8,8 @@ type MTLMaterialCreator = ReturnType<MTLLoader['parse']>;
 
 type ModelFormat = 'glb' | 'gltf' | 'obj' | 'ifc';
 
+export type ImportProgressCallback = (percent: number, stage: 'download' | 'parse') => void;
+
 export class ModelManager {
   private scene: THREE.Scene;
   private gltfLoader: GLTFLoader;
@@ -19,6 +21,9 @@ export class ModelManager {
   private models: Map<string, THREE.Object3D>;
   private animations: Map<string, THREE.AnimationClip[]>;
   private mixers: Map<string, THREE.AnimationMixer>;
+
+  /** Reports import progress (file download and IFC geometry parsing). */
+  onImportProgress: ImportProgressCallback | null = null;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -33,9 +38,63 @@ export class ModelManager {
 
   private initIFCLoader(): Promise<void> {
     if (!this.ifcLoaderReady) {
-      this.ifcLoaderReady = this.ifcLoader.ifcManager.setWasmPath('/');
+      this.ifcLoaderReady = (async () => {
+        const manager = this.ifcLoader.ifcManager;
+
+        // Parse IFC files off the main thread so big imports don't freeze the UI.
+        try {
+          await manager.useWebWorkers(true, '/IFCWorker.js');
+        } catch (error) {
+          console.warn('IFC web worker unavailable, falling back to main-thread parsing.', error);
+        }
+
+        await manager.setWasmPath('/');
+
+        // Georeferenced models sit millions of units from the origin; moving
+        // them to the origin avoids float-precision jitter and speeds up
+        // the bounds computation that follows.
+        try {
+          await manager.applyWebIfcConfig({ COORDINATE_TO_ORIGIN: true });
+        } catch (error) {
+          console.warn('Could not apply web-ifc config:', error);
+        }
+
+        manager.setOnProgress((event) => {
+          if (this.onImportProgress && event.total > 0) {
+            this.onImportProgress(Math.round((event.loaded / event.total) * 100), 'parse');
+          }
+        });
+      })();
     }
     return this.ifcLoaderReady;
+  }
+
+  private reportDownloadProgress(event: ProgressEvent): void {
+    if (this.onImportProgress && event.lengthComputable && event.total > 0) {
+      this.onImportProgress(Math.round((event.loaded / event.total) * 100), 'download');
+    }
+  }
+
+  /**
+   * Scale the model to ~2 world units and center it on the origin.
+   * Bounds are computed once; the post-scale center is derived arithmetically
+   * (scaling happens about the origin), avoiding a second full traversal
+   * of the geometry — significant for large models.
+   */
+  private normalizeModelTransform(model: THREE.Object3D): void {
+    const box = new THREE.Box3().setFromObject(model);
+    if (box.isEmpty()) return;
+
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    if (maxDim <= 0) return;
+
+    const scale = 2 / maxDim;
+    model.scale.multiplyScalar(scale);
+
+    const center = box.getCenter(new THREE.Vector3()).multiplyScalar(scale);
+    model.position.sub(center);
+    model.updateMatrixWorld(true);
   }
 
   /**
@@ -145,22 +204,13 @@ export class ModelManager {
               });
             }
 
-            // Center and scale the model
-            const box = new THREE.Box3().setFromObject(model);
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const scale = 2 / maxDim;
-            model.scale.multiplyScalar(scale);
-
-            const scaledBox = new THREE.Box3().setFromObject(model);
-            const center = scaledBox.getCenter(new THREE.Vector3());
-            model.position.sub(center);
+            this.normalizeModelTransform(model);
 
             this.scene.add(model);
             this.models.set(name, model);
             resolve(model);
           },
-          undefined,
+          (event) => this.reportDownloadProgress(event),
           reject
         );
       });
@@ -182,64 +232,25 @@ export class ModelManager {
             this.ifcModelIds.set(name, ifcModel.modelID);
           }
 
-          const box = new THREE.Box3().setFromObject(ifcModel);
-          const size = box.getSize(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-          if (maxDim > 0) {
-            const scale = 2 / maxDim;
-            ifcModel.scale.multiplyScalar(scale);
-            const scaledBox = new THREE.Box3().setFromObject(ifcModel);
-            const center = scaledBox.getCenter(new THREE.Vector3());
-            ifcModel.position.sub(center);
-          }
+          this.normalizeModelTransform(ifcModel);
 
           this.scene.add(ifcModel);
           this.models.set(name, ifcModel);
           resolve(ifcModel);
         },
-        undefined,
+        (event) => this.reportDownloadProgress(event),
         reject
       );
     });
   }
 
   private async loadIFCModelFromFile(name: string, file: File): Promise<THREE.Object3D> {
-    await this.initIFCLoader();
     const url = URL.createObjectURL(file);
-    return new Promise((resolve, reject) => {
-      this.ifcLoader.load(
-        url,
-        (ifcModel: any) => {
-          URL.revokeObjectURL(url);
-          ifcModel.userData.name = name;
-          ifcModel.userData.format = 'ifc';
-
-          if (ifcModel.modelID !== undefined) {
-            this.ifcModelIds.set(name, ifcModel.modelID);
-          }
-
-          const box = new THREE.Box3().setFromObject(ifcModel);
-          const size = box.getSize(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-          if (maxDim > 0) {
-            const scale = 2 / maxDim;
-            ifcModel.scale.multiplyScalar(scale);
-            const scaledBox = new THREE.Box3().setFromObject(ifcModel);
-            const center = scaledBox.getCenter(new THREE.Vector3());
-            ifcModel.position.sub(center);
-          }
-
-          this.scene.add(ifcModel);
-          this.models.set(name, ifcModel);
-          resolve(ifcModel);
-        },
-        undefined,
-        (error: any) => {
-          URL.revokeObjectURL(url);
-          reject(error);
-        }
-      );
-    });
+    try {
+      return await this.loadIFCModel(url, name);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   }
 
   /**
@@ -286,16 +297,7 @@ export class ModelManager {
               this.animations.set(name, gltf.animations);
             }
 
-            // Center and scale the model
-            const box = new THREE.Box3().setFromObject(model);
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const scale = 2 / maxDim;
-            model.scale.multiplyScalar(scale);
-
-            const scaledBox = new THREE.Box3().setFromObject(model);
-            const center = scaledBox.getCenter(new THREE.Vector3());
-            model.position.sub(center);
+            this.normalizeModelTransform(model);
 
             this.scene.add(model);
             this.models.set(name, model);
@@ -369,16 +371,7 @@ export class ModelManager {
               });
             }
 
-            // Center and scale the model
-            const box = new THREE.Box3().setFromObject(model);
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const scale = 2 / maxDim;
-            model.scale.multiplyScalar(scale);
-
-            const scaledBox = new THREE.Box3().setFromObject(model);
-            const center = scaledBox.getCenter(new THREE.Vector3());
-            model.position.sub(center);
+            this.normalizeModelTransform(model);
 
             this.scene.add(model);
             this.models.set(name, model);
@@ -456,7 +449,8 @@ export class ModelManager {
 
       const ifcModelId = this.ifcModelIds.get(name);
       if (ifcModelId !== undefined) {
-        this.ifcLoader.ifcManager.close(ifcModelId).catch(() => {});
+        // close() is typed void here but returns a promise in worker mode.
+        Promise.resolve(this.ifcLoader.ifcManager.close(ifcModelId) as unknown).catch(() => {});
         this.ifcModelIds.delete(name);
       }
 

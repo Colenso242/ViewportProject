@@ -2,7 +2,9 @@
   <aside v-if="selectedObject" class="properties-panel">
     <div class="panel-header">
       <h2>Properties</h2>
-      <button @click="$emit('close')" class="close-btn" title="Close Panel">✕</button>
+      <button @click="$emit('close')" class="icon-btn danger-hover" title="Close Panel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
     </div>
 
     <div class="panel-content">
@@ -40,8 +42,8 @@ function toggleVisibility() {
 <style scoped>
 .properties-panel {
   width: 300px;
-  background: #1e293b;
-  border-left: 1px solid #334155;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -52,34 +54,18 @@ function toggleVisibility() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
-  background: #334155;
-  border-bottom: 1px solid #334155;
+  padding: 0.6rem 0.75rem 0.6rem 1rem;
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .panel-header h2 {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #f8fafc;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 0.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s ease;
-}
-
-.close-btn:hover {
-  color: #ef4444;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
 }
 
 .panel-content {
