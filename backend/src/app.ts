@@ -2,7 +2,7 @@ import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { serverConfig } from './config/server';
-import {SensorService} from "./services/SensorService";
+import {SensorService, MAX_HISTORY_LIMIT} from "./services/SensorService";
 import {PlacementService} from "./services/PlacementService";
 
 export class App {
@@ -24,6 +24,27 @@ export class App {
     }));
   }
 
+  /**
+   * Parse an optional positive-integer query param. Returns `undefined` when
+   * absent, the clamped value when valid, or an `Error` describing why the
+   * value was rejected (non-numeric / non-positive).
+   */
+  private _parsePositiveInt(
+    raw: unknown,
+    name: string,
+    max?: number
+  ): number | undefined | Error {
+    if (raw === undefined) return undefined;
+
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 1) {
+      return new Error(`Invalid '${name}': must be a positive integer`);
+    }
+
+    const truncated = Math.trunc(value);
+    return max ? Math.min(truncated, max) : truncated;
+  }
+
   private _setupRoutes(sensorService: SensorService, placementService?: PlacementService): void {
     this.app.get('/api/health', this._healthCheck.bind(this));
 
@@ -31,8 +52,18 @@ export class App {
       this.app.get('/api/sensors/:id/history', async (req: Request, res: Response) => {
         try {
           const sensorId = String(req.params.id);
-          const limit = req.query.limit ? parseInt(req.query.limit as string) : 1000;
-          const timeRangeMinutes = req.query.timeRangeMinutes ? parseInt(req.query.timeRangeMinutes as string) : undefined;
+
+          const limit = this._parsePositiveInt(req.query.limit, 'limit', MAX_HISTORY_LIMIT);
+          const timeRangeMinutes = this._parsePositiveInt(req.query.timeRangeMinutes, 'timeRangeMinutes');
+
+          if (limit instanceof Error) {
+            res.status(400).json({ error: limit.message });
+            return;
+          }
+          if (timeRangeMinutes instanceof Error) {
+            res.status(400).json({ error: timeRangeMinutes.message });
+            return;
+          }
 
           const history = await sensorService.getHistoricalData(sensorId, limit, timeRangeMinutes);
           res.json(history);

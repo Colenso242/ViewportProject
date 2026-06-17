@@ -1,6 +1,11 @@
 import { Collection } from 'mongodb';
 import { SensorReading, SensorData } from '../types';
 
+// Upper bound on rows returned by a single historical query, guarding against
+// unbounded client-supplied limits (e.g. ?limit=99999999).
+export const MAX_HISTORY_LIMIT = 10000;
+const DEFAULT_HISTORY_LIMIT = 1000;
+
 export class SensorService {
   constructor(private sensorReadingsCollection: Collection<SensorReading>) {}
 
@@ -24,10 +29,15 @@ export class SensorService {
     }
   }
 
-  async getHistoricalData(sensorId: string, limit: number = 1000, timeRangeMinutes?: number): Promise<SensorData[]> {
+  async getHistoricalData(sensorId: string, limit: number = DEFAULT_HISTORY_LIMIT, timeRangeMinutes?: number): Promise<SensorData[]> {
     try {
+      // Defensively clamp: callers may pass through unvalidated client input.
+      const safeLimit = Number.isFinite(limit)
+        ? Math.min(Math.max(Math.trunc(limit), 1), MAX_HISTORY_LIMIT)
+        : DEFAULT_HISTORY_LIMIT;
+
       const query: any = { "metadata.sensorId": sensorId };
-      if (timeRangeMinutes) {
+      if (timeRangeMinutes && Number.isFinite(timeRangeMinutes) && timeRangeMinutes > 0) {
         const timeThreshold = new Date(Date.now() - timeRangeMinutes * 60 * 1000);
         query.timestamp = { $gte: timeThreshold };
       }
@@ -35,7 +45,7 @@ export class SensorService {
       const history = await this.sensorReadingsCollection
         .find(query)
         .sort({ timestamp: -1 })
-        .limit(limit)
+        .limit(safeLimit)
         .toArray();
 
       // Return in chronological order

@@ -32,6 +32,9 @@ const props = defineProps<{
   sensorData: Record<string, any>;
   pointSensors?: SensorPoint[];
   getPointWorldPosition?: (placementId: string, target: THREE.Vector3) => THREE.Vector3 | null;
+  // When true, the model's nodes move at runtime (animation mixer), so mesh
+  // world positions must be recomputed every frame instead of cached.
+  animated?: boolean;
 }>();
 
 interface MappedSensor {
@@ -57,8 +60,9 @@ watch(() => props.currentModel, () => {
 function getMeshWorldPosition(uuid: string): THREE.Vector3 | null {
   if (!props.currentModel) return null;
 
-  // 1. O(1) Lookup: Check cache first to avoid expensive scene traversal and Box3 calculation
-  if (meshPositionCache.has(uuid)) {
+  // 1. O(1) Lookup: Check cache first to avoid expensive scene traversal and Box3 calculation.
+  // Skip the cache for animated models, whose node positions change every frame.
+  if (!props.animated && meshPositionCache.has(uuid)) {
     return meshPositionCache.get(uuid)!.clone();
   }
 
@@ -76,8 +80,10 @@ function getMeshWorldPosition(uuid: string): THREE.Vector3 | null {
   const box = new THREE.Box3().setFromObject(targetNode);
   box.getCenter(vector);
 
-  // Cache the result
-  meshPositionCache.set(uuid, vector.clone());
+  // Cache the result for static models only; animated nodes move each frame.
+  if (!props.animated) {
+    meshPositionCache.set(uuid, vector.clone());
+  }
   return vector;
 }
 

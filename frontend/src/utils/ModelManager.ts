@@ -405,6 +405,13 @@ export class ModelManager {
   }
 
   /**
+   * Whether a model has an animation mixer (i.e. its nodes can move at runtime).
+   */
+  hasAnimations(name: string): boolean {
+    return this.mixers.has(name);
+  }
+
+  /**
    * Get animation mixer for a model
    * @deprecated This method is kept for future use but not currently used in the application
    */

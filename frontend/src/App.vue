@@ -49,6 +49,7 @@
                 :sensorData="sensorData"
                 :pointSensors="pointSensors"
                 :getPointWorldPosition="getPointWorldPosition"
+                :animated="currentModelAnimated"
               />
 
               <!-- Floating Overlay Dashboard -->
@@ -138,6 +139,11 @@ const selectedSensorId = computed(() => {
   }
   return null;
 });
+
+// Animated models move their nodes at runtime, so cached world positions go stale.
+const currentModelAnimated = computed(() =>
+  !!currentModel.value && getModelManager().hasAnimations('dropped-model')
+);
 
 const objectTreeItems = computed(() => {
   if (!currentModel.value) return [];
