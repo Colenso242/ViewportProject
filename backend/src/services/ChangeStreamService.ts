@@ -20,7 +20,7 @@ export class ChangeStreamService {
       await this._tryChangeStream();
     } catch (error: any) {
       if (error.code === 40573 || error.code === 166) {
-        console.log('⚠️  Change streams not supported (replica set or time series limitation). Falling back to polling mode.');
+        console.log('Change streams not supported (replica set or time series limitation). Falling back to polling mode.');
         await this._initializePolling();
         this._startPolling();
       } else {
@@ -55,7 +55,7 @@ export class ChangeStreamService {
   }
 
   private _startPolling(): void {
-    console.log('✓ Polling mode active (checking every 1s)');
+    console.log('Polling mode active (checking every 1s)');
 
     this.pollingInterval = setInterval(async () => {
       if (this.isPolling) return;
@@ -100,7 +100,7 @@ export class ChangeStreamService {
 
   private _handleError(error: any): void {
     if (error.code === 40573 || error.code === 166) {
-      console.log('⚠️  Change streams not supported. Switching to polling mode.');
+      console.log('Change streams not supported. Switching to polling mode.');
       this._initializePolling().then(() => this._startPolling());
     } else {
       console.error("Change Stream error:", error);

@@ -306,10 +306,6 @@ async function handleDrop(event: DragEvent): Promise<void> {
   }
 }
 
-function onFrame() {
-  applyInteractionMaterials(hoveredObject.value, selectedObject.value);
-}
-
 watch(pointSensors, (points) => {
   pointMarkers.sync(points);
 
@@ -329,7 +325,7 @@ onMounted(() => {
   const el = (viewportComponent.value as any)?.viewportElement;
   if (el) initThree(el);
 
-  startAnimationLoop(onFrame);
+  startAnimationLoop();
 });
 
 onBeforeUnmount(() => {

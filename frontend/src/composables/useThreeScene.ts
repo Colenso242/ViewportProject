@@ -65,10 +65,10 @@ export function useThreeScene() {
     window.addEventListener('resize', handleResize);
   }
 
-  function startAnimationLoop(onFrame: () => void) {
+  function startAnimationLoop(onFrame?: () => void) {
     const animate = () => {
       controls.update();
-      onFrame();
+      onFrame?.();
       renderer.render(scene, camera);
       frameId = requestAnimationFrame(animate);
     };
