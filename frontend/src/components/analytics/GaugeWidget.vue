@@ -37,6 +37,7 @@ const updateGaugeOption = () => {
   const min = config?.min ?? 0;
   const max = config?.max ?? 100;
   const threshold = config?.threshold ?? 80;
+  const unit = config?.unit ?? liveReading.value?.unit ?? '';
   const value = liveReading.value?.value ?? currentValue.value;
   const isCritical = liveReading.value?.isCritical ?? false;
 
@@ -57,7 +58,7 @@ const updateGaugeOption = () => {
     },
     tooltip: {
       trigger: 'item',
-      formatter: (params: any) => `${params.name}: ${value.toFixed(2)}`
+      formatter: () => `${props.sensorId}: ${value.toFixed(2)} ${unit}`.trim()
     },
     series: [
       {
@@ -66,7 +67,7 @@ const updateGaugeOption = () => {
         endAngle: -45,
         min,
         max,
-        splitNumber: 10,
+        splitNumber: 5,
         axisLine: {
           lineStyle: {
             width: 30,
@@ -92,12 +93,14 @@ const updateGaugeOption = () => {
           }
         },
         detail: {
+          valueAnimation: true,
+          offsetCenter: [0, '70%'],
           textStyle: {
             color: isCritical ? '#f87171' : '#e6ecf5',
             fontSize: 20,
             fontWeight: 'bold'
           },
-          formatter: '{value}'
+          formatter: (v: number) => `${Number.isInteger(v) ? v : v.toFixed(1)} ${unit}`.trim()
         },
         data: [{ value, name: 'Value' }]
       }

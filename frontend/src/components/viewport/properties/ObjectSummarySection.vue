@@ -2,12 +2,8 @@
   <section class="prop-group header-group">
     <h3>{{ selectedObject.name || 'Unnamed Object' }}</h3>
     <p class="prop-row">
-      <span class="prop-label">Type</span>
-      <span class="prop-value">{{ selectedObject.type }}</span>
-    </p>
-    <p v-if="selectedObject.uuid" class="prop-row">
-      <span class="prop-label">UUID</span>
-      <span class="prop-value uuid-val" :title="selectedObject.uuid">{{ selectedObject.uuid.split('-')[0] }}...</span>
+      <span class="prop-label">Kind</span>
+      <span class="prop-value">{{ friendlyKind }}</span>
     </p>
 
     <label class="toggle-row">
@@ -23,14 +19,23 @@
 
 <script setup lang="ts">
 import * as THREE from 'three';
+import { computed } from 'vue';
 
-defineProps<{
+const props = defineProps<{
   selectedObject: THREE.Object3D;
 }>();
 
 defineEmits<{
   'toggle-visibility': [];
 }>();
+
+// Surface a human-readable kind instead of the raw three.js class name.
+const friendlyKind = computed(() => {
+  if ((props.selectedObject as THREE.Mesh).isMesh) return 'Component';
+  const type = props.selectedObject.type;
+  if (type === 'Group' || type === 'Object3D' || type === 'Scene') return 'Group';
+  return type;
+});
 </script>
 
 <style scoped>
@@ -69,12 +74,6 @@ defineEmits<{
 
 .prop-value {
   color: var(--text);
-}
-
-.uuid-val {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  cursor: help;
 }
 </style>
 

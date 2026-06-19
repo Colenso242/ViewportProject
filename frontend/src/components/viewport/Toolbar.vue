@@ -11,35 +11,43 @@
     </div>
 
     <div class="toolbar-controls">
-      <button @click="$emit('toggle-overview')" class="toolbar-btn" title="Open analytics overview">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/>
-          <rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>
-        </svg>
+      <ToolbarButton @click="$emit('toggle-overview')" title="Open analytics overview">
+        <template #icon>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/>
+            <rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>
+          </svg>
+        </template>
         Overview
-      </button>
+      </ToolbarButton>
 
-      <button @click="$emit('toggle-tree')" class="toolbar-btn" :class="{ active: showObjectTree }" title="Toggle object tree">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>
-        </svg>
+      <ToolbarButton :active="showObjectTree" @click="$emit('toggle-tree')" title="Toggle object tree">
+        <template #icon>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>
+          </svg>
+        </template>
         Objects
-      </button>
+      </ToolbarButton>
 
-      <button @click="$emit('toggle-placement')" class="toolbar-btn" :class="{ active: placementMode }" title="Place a sensor point: click any spot on the model (or Shift+Click anytime)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>
-        </svg>
+      <ToolbarButton :active="placementMode" @click="$emit('toggle-placement')" title="Place a sensor point: click any spot on the model (or Shift+Click anytime)">
+        <template #icon>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>
+          </svg>
+        </template>
         Place Sensor
-      </button>
+      </ToolbarButton>
 
-      <button @click="$emit('toggle-ghosting')" class="toolbar-btn" :class="{ active: ghostingEnabled }" title="Toggle ghosting of unlinked objects">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
-        </svg>
+      <ToolbarButton :active="ghostingEnabled" @click="$emit('toggle-ghosting')" title="Toggle ghosting of unlinked objects">
+        <template #icon>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </template>
         Ghosting
-        <span class="toggle-state">{{ ghostingEnabled ? 'on' : 'off' }}</span>
-      </button>
+        <template #trailing>{{ ghostingEnabled ? 'on' : 'off' }}</template>
+      </ToolbarButton>
 
       <div class="api-status" :class="statusClass" :title="`API status: ${apiStatus}`">
         <span class="status-dot"></span>
@@ -51,6 +59,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import ToolbarButton from './ToolbarButton.vue';
 
 const props = defineProps<{
   apiStatus: string;
@@ -115,49 +124,6 @@ const statusClass = computed(() => {
   display: flex;
   gap: 0.5rem;
   align-items: center;
-}
-
-.toolbar-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.45rem 0.8rem;
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 0.82rem;
-  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-}
-
-.toolbar-btn:hover {
-  color: var(--text);
-  background: var(--surface-2);
-  border-color: var(--text-faint);
-}
-
-.toolbar-btn.active {
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
-
-.toggle-state {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.05rem 0.35rem;
-  border-radius: 999px;
-  background: var(--surface-3);
-  color: var(--text-faint);
-}
-
-.toolbar-btn.active .toggle-state {
-  background: var(--accent);
-  color: white;
 }
 
 .api-status {

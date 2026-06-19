@@ -5,7 +5,6 @@ export const databaseConfig: DatabaseConfig = {
   DB_NAME: process.env.DB_NAME || 'iot_digital_twin',
   COLLECTIONS: {
     SENSOR_READINGS: 'sensor_readings',
-    SENSOR_READINGS_LIVE: 'sensor_readings_live',
     SENSOR_PLACEMENTS: 'sensor_placements'
   }
 };

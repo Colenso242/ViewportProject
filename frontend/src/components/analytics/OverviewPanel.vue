@@ -10,55 +10,28 @@
     <div class="overview-content">
       <div class="widgets-grid">
 
-        <!-- Main Timeseries Widget -->
-        <div class="widget timeseries-widget">
-          <h3>Key Sensor Trend</h3>
-          <div class="widget-body">
-            <select v-model="selectedWidgetSensor" class="select-control widget-dropdown">
-              <option v-for="sensor in sensorsInfo" :key="sensor.id" :value="sensor.id">
-                {{ sensor.id }}
-              </option>
-            </select>
-            <div class="chart-wrapper" v-if="selectedWidgetSensor">
-              <TimeseriesDashboard
-                :sensorId="selectedWidgetSensor" />
-            </div>
-            <div v-else class="empty-state">No sensors available.</div>
+        <WidgetCard title="Key Sensor Trend" class="timeseries-widget">
+          <SensorSelect v-model="selectedWidgetSensor" />
+          <div class="chart-wrapper" v-if="selectedWidgetSensor">
+            <TimeseriesDashboard :sensorId="selectedWidgetSensor" />
           </div>
-        </div>
+          <div v-else class="empty-state">No sensors available.</div>
+        </WidgetCard>
 
-        <!-- Raw Data Widget -->
-        <div class="widget raw-data-widget">
-          <h3>Live Raw Data</h3>
-          <div class="widget-body">
-            <RawDataWidget />
-          </div>
-        </div>
+        <WidgetCard title="Live Raw Data" class="raw-data-widget">
+          <RawDataWidget />
+        </WidgetCard>
 
-        <!-- Gauge Widget -->
-        <div class="widget gauge-widget">
-          <h3>Sensor Gauge</h3>
-          <div class="widget-body">
-            <select v-model="selectedGaugeSensor" class="select-control widget-dropdown">
-              <option v-for="sensor in sensorsInfo" :key="sensor.id" :value="sensor.id">
-                {{ sensor.id }}
-              </option>
-            </select>
-            <div class="gauge-wrapper" v-if="selectedGaugeSensor">
-              <GaugeWidget
-                :sensorId="selectedGaugeSensor"
-              />
-            </div>
+        <WidgetCard title="Sensor Gauge" class="gauge-widget">
+          <SensorSelect v-model="selectedGaugeSensor" />
+          <div class="gauge-wrapper" v-if="selectedGaugeSensor">
+            <GaugeWidget :sensorId="selectedGaugeSensor" />
           </div>
-        </div>
+        </WidgetCard>
 
-        <!-- Placeholder Widget -->
-        <div class="widget placeholder-widget">
-          <h3>System Alerts</h3>
-          <div class="widget-body center-content">
-            <p>Space reserved for alerts table.</p>
-          </div>
-        </div>
+        <WidgetCard title="System Alerts" class="placeholder-widget" center>
+          <p>Space reserved for alerts table.</p>
+        </WidgetCard>
 
       </div>
     </div>
@@ -66,15 +39,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
-import { storeToRefs } from 'pinia';
+import { ref } from 'vue';
 import TimeseriesDashboard from './TimeseriesDashboard.vue';
 import RawDataWidget from './RawDataWidget.vue';
 import GaugeWidget from './GaugeWidget.vue';
-import { useSensorStore } from '../../stores/useSensorStore';
-
-const sensorStore = useSensorStore();
-const { sensorsInfo } = storeToRefs(sensorStore);
+import WidgetCard from './WidgetCard.vue';
+import SensorSelect from './SensorSelect.vue';
 
 defineEmits<{
   'close': [];
@@ -82,16 +52,6 @@ defineEmits<{
 
 const selectedWidgetSensor = ref('');
 const selectedGaugeSensor = ref('');
-
-watch(sensorsInfo, (info) => {
-  if (info && info.length > 0 && !selectedWidgetSensor.value) {
-    selectedWidgetSensor.value = info[0].id;
-  }
-  if (info && info.length > 0 && !selectedGaugeSensor.value) {
-    selectedGaugeSensor.value = info[0].id;
-  }
-}, { immediate: true });
-
 </script>
 
 <style scoped>
@@ -148,54 +108,6 @@ watch(sensorsInfo, (info) => {
   }
 }
 
-.widget {
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition: border-color 0.15s ease;
-}
-
-.widget:hover {
-  border-color: var(--border-strong);
-}
-
-.widget h3 {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0.7rem 1rem;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-muted);
-}
-
-.widget h3::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.widget-body {
-  flex: 1;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-.widget-dropdown {
-  margin-bottom: 1rem;
-}
-
 .chart-wrapper {
   flex: 1;
   position: relative;
@@ -209,12 +121,5 @@ watch(sensorsInfo, (info) => {
   display: flex;
   justify-content: center;
   align-items: center;
-}
-
-.center-content {
-  justify-content: center;
-  align-items: center;
-  color: var(--text-faint);
-  text-align: center;
 }
 </style>

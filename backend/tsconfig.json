@@ -5,12 +5,17 @@
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",
+    "paths": {
+      "@shared/*": ["../shared/*"]
+    },
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "moduleResolution": "node",
+    // TS6 deprecates the legacy "node" resolution; silence until a TS7 migration.
+    "ignoreDeprecations": "6.0",
     "allowSyntheticDefaultImports": true,
     "declaration": true,
     "declarationMap": true,

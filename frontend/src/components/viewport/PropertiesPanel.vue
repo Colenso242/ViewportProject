@@ -34,6 +34,9 @@ defineEmits<{
 
 function toggleVisibility() {
   if (props.selectedObject) {
+    // selectedObject is a live THREE.Object3D, not reactive Vue state — toggling
+    // its visibility on the scene graph is the intended effect here.
+    // eslint-disable-next-line vue/no-mutating-props
     props.selectedObject.visible = !props.selectedObject.visible;
   }
 }

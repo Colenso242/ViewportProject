@@ -234,6 +234,32 @@ input {
   flex-direction: column;
   overflow: hidden;
   box-shadow: var(--shadow-lg);
+  /* Grow from the corner it's anchored to. */
+  transform-origin: bottom left;
+}
+
+/* Pop the dashboard up from its corner on open, and back down on close. */
+.popover-enter-active {
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.popover-leave-active {
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.popover-enter-from,
+.popover-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover-enter-active,
+  .popover-leave-active {
+    transition: opacity 0.14s ease;
+  }
+  .popover-enter-from,
+  .popover-leave-to {
+    transform: none;
+  }
 }
 
 .floating-header {

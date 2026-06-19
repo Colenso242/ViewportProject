@@ -1,10 +1,12 @@
 <template>
-  <div v-if="loadingStatus" class="loading-indicator" :class="loadingStatus.type">
-    <span v-if="loadingStatus.type === 'loading'" class="spinner"></span>
-    <svg v-else-if="loadingStatus.type === 'success'" class="status-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-    <svg v-else class="status-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-    <p>{{ loadingStatus.message }}</p>
-  </div>
+  <Transition name="toast">
+    <div v-if="loadingStatus" class="loading-indicator" :class="loadingStatus.type">
+      <span v-if="loadingStatus.type === 'loading'" class="spinner"></span>
+      <svg v-else-if="loadingStatus.type === 'success'" class="status-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+      <svg v-else class="status-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      <p>{{ loadingStatus.message }}</p>
+    </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">
@@ -35,7 +37,6 @@ defineProps<{
   font-weight: 500;
   font-size: 0.85rem;
   box-shadow: var(--shadow-lg);
-  animation: slideIn 0.3s ease;
   z-index: 1000;
   max-width: 360px;
 }
@@ -82,14 +83,30 @@ defineProps<{
   to { transform: rotate(360deg); }
 }
 
-@keyframes slideIn {
-  from {
-    transform: translateX(400px);
-    opacity: 0;
+/* Slides in from the right on appear, and back out on dismiss. */
+.toast-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.toast-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-enter-active,
+  .toast-leave-active {
+    transition: opacity 0.2s ease;
   }
-  to {
-    transform: translateX(0);
-    opacity: 1;
+  .toast-enter-from,
+  .toast-leave-to {
+    transform: none;
+  }
+  .spinner {
+    animation: none;
   }
 }
 </style>

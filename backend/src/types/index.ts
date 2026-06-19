@@ -1,3 +1,9 @@
+import type { SensorPlacement as SensorPlacementDTO } from '@shared/types';
+
+// Wire DTOs are defined once in shared/types.d.ts and re-exported here so the
+// rest of the backend keeps importing them from '../types' unchanged.
+export type { SensorData, SensorConfig } from '@shared/types';
+
 export interface SensorMetadata {
   sensorId: string;
   sensorType: string;
@@ -5,6 +11,8 @@ export interface SensorMetadata {
   threshold: number;
 }
 
+// The persisted Mongo document for a sensor reading (backend-only shape; the
+// API serializes this into the shared SensorData DTO before sending).
 export interface SensorReading {
   _id?: any;
   timestamp: Date;
@@ -14,23 +22,9 @@ export interface SensorReading {
   isWarning?: boolean;
 }
 
-export interface SensorData {
-  id: string;
-  type: string;
-  value: number;
-  threshold: number;
-  unit: string;
-  isCritical: boolean;
-  isWarning?: boolean;
-  timestamp?: Date;
-}
-
-export interface SensorPlacement {
+// The persisted placement document: the shared placement DTO plus DB metadata.
+export interface SensorPlacement extends SensorPlacementDTO {
   _id?: any;
-  placementId: string;
-  modelId: string;
-  sensorId: string;
-  position: { x: number; y: number; z: number };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,7 +34,6 @@ export interface DatabaseConfig {
   DB_NAME: string;
   COLLECTIONS: {
     SENSOR_READINGS: string;
-    SENSOR_READINGS_LIVE: string;
     SENSOR_PLACEMENTS: string;
   };
 }

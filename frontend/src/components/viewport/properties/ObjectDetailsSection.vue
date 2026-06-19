@@ -1,19 +1,15 @@
 <template>
   <section class="prop-group">
-    <h3>Object Data</h3>
+    <h3>Structure</h3>
 
-    <div v-if="geometryType" class="prop-row">
-      <span class="prop-label">Geometry</span>
-      <span class="prop-value">{{ geometryType }}</span>
+    <div class="prop-row">
+      <span class="prop-label">Components</span>
+      <span class="prop-value">{{ partCount }}</span>
     </div>
 
-    <div v-if="materialType" class="prop-row">
-      <span class="prop-label">Material</span>
-      <span class="prop-value">{{ materialType }}</span>
-    </div>
-
-    <div v-if="!geometryType && !materialType" class="empty-state">
-      No geometry or material details available.
+    <div class="prop-row">
+      <span class="prop-label">Linked sensors</span>
+      <span class="prop-value">{{ linkedSensorCount }}</span>
     </div>
   </section>
 </template>
@@ -21,20 +17,31 @@
 <script setup lang="ts">
 import * as THREE from 'three';
 import { computed } from 'vue';
+import { storeToRefs } from 'pinia';
+import { useSensorStore } from '../../../stores/useSensorStore';
 
 const props = defineProps<{
   selectedObject: THREE.Object3D;
 }>();
 
-const geometryType = computed(() => {
-  const geometry = (props.selectedObject as THREE.Mesh).geometry;
-  return geometry?.type || '';
+const { sensorMappings } = storeToRefs(useSensorStore());
+
+// How many renderable parts make up this object (1 for a single mesh).
+const partCount = computed(() => {
+  let count = 0;
+  props.selectedObject.traverse((child) => {
+    if ((child as THREE.Mesh).isMesh && !child.userData.isSensorPointMarker) count++;
+  });
+  return count;
 });
 
-const materialType = computed(() => {
-  const material = (props.selectedObject as THREE.Mesh).material;
-  if (!material) return '';
-  return Array.isArray(material) ? 'Multiple Materials' : material.type;
+// How many of those parts are wired to a sensor — i.e. this object's coverage.
+const linkedSensorCount = computed(() => {
+  let count = 0;
+  props.selectedObject.traverse((child) => {
+    if (sensorMappings.value[child.uuid]) count++;
+  });
+  return count;
 });
 </script>
 
@@ -66,11 +73,6 @@ const materialType = computed(() => {
 
 .prop-value {
   color: var(--text);
-}
-
-.empty-state {
-  color: var(--text-faint);
-  font-size: 0.85rem;
 }
 </style>
 

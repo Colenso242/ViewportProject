@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
-import { IFCLoader } from 'web-ifc-three';
+// Type-only import: the value is loaded lazily via dynamic import (see
+// ensureIFCLoader) so web-ifc-three + its WASM glue are code-split out of the
+// main bundle and only fetched when an IFC file is actually opened.
+import type { IFCLoader } from 'web-ifc-three';
 
 type MTLMaterialCreator = ReturnType<MTLLoader['parse']>;
 
@@ -10,17 +13,36 @@ type ModelFormat = 'glb' | 'gltf' | 'obj' | 'ifc';
 
 export type ImportProgressCallback = (percent: number, stage: 'download' | 'parse') => void;
 
+/**
+ * Per-format loading strategy: each entry knows how to load its format from a
+ * URL or from dropped File objects, so callers dispatch via a table lookup
+ * instead of branching on the format.
+ */
+interface ModelLoadStrategy {
+  fromUrl(url: string, name: string): Promise<THREE.Object3D>;
+  fromFiles(name: string, mainFile: File, mtlFile?: File | null): Promise<THREE.Object3D>;
+}
+
 export class ModelManager {
   private scene: THREE.Scene;
   private gltfLoader: GLTFLoader;
   private objLoader: OBJLoader;
   private mtlLoader: MTLLoader;
-  private ifcLoader: IFCLoader;
-  private ifcLoaderReady: Promise<void> | null = null;
+  private ifcLoader: IFCLoader | null = null;
+  private ifcLoaderReady: Promise<IFCLoader> | null = null;
   private ifcModelIds: Map<string, number> = new Map();
   private models: Map<string, THREE.Object3D>;
   private animations: Map<string, THREE.AnimationClip[]>;
   private mixers: Map<string, THREE.AnimationMixer>;
+  private readonly loadStrategies: Record<ModelFormat, ModelLoadStrategy>;
+
+  /** Maps a file extension to its model format. */
+  private static readonly EXTENSION_FORMATS: Record<string, ModelFormat> = {
+    glb: 'glb',
+    gltf: 'gltf',
+    obj: 'obj',
+    ifc: 'ifc',
+  };
 
   /** Reports import progress (file download and IFC geometry parsing). */
   onImportProgress: ImportProgressCallback | null = null;
@@ -30,16 +52,38 @@ export class ModelManager {
     this.gltfLoader = new GLTFLoader();
     this.objLoader = new OBJLoader();
     this.mtlLoader = new MTLLoader();
-    this.ifcLoader = new IFCLoader();
     this.models = new Map();
     this.animations = new Map();
     this.mixers = new Map();
+
+    this.loadStrategies = {
+      glb: {
+        fromUrl: (url, name) => this.loadGLTFModel(url, name, 'glb'),
+        fromFiles: (name, file) => this.loadGLTFModelFromFile(name, file, 'glb'),
+      },
+      gltf: {
+        fromUrl: (url, name) => this.loadGLTFModel(url, name, 'gltf'),
+        fromFiles: (name, file) => this.loadGLTFModelFromFile(name, file, 'gltf'),
+      },
+      obj: {
+        fromUrl: (url, name) => this.loadOBJModel(url, name),
+        fromFiles: (name, file, mtl) => this.loadOBJModelFromFiles(name, file, mtl),
+      },
+      ifc: {
+        fromUrl: (url, name) => this.loadIFCModel(url, name),
+        fromFiles: (name, file) => this.loadIFCModelFromFile(name, file),
+      },
+    };
   }
 
-  private initIFCLoader(): Promise<void> {
+  private ensureIFCLoader(): Promise<IFCLoader> {
     if (!this.ifcLoaderReady) {
       this.ifcLoaderReady = (async () => {
-        const manager = this.ifcLoader.ifcManager;
+        // Dynamic import: keeps web-ifc-three out of the main bundle until the
+        // first IFC import, so GLB/OBJ-only sessions never pay for it.
+        const { IFCLoader } = await import('web-ifc-three');
+        const loader = new IFCLoader();
+        const manager = loader.ifcManager;
 
         // Parse IFC files off the main thread so big imports don't freeze the UI.
         try {
@@ -64,6 +108,9 @@ export class ModelManager {
             this.onImportProgress(Math.round((event.loaded / event.total) * 100), 'parse');
           }
         });
+
+        this.ifcLoader = loader;
+        return loader;
       })();
     }
     return this.ifcLoaderReady;
@@ -102,12 +149,12 @@ export class ModelManager {
    */
   private getModelFormat(url: string): ModelFormat {
     const normalizedUrl = url.toLowerCase().split('#')[0].split('?')[0];
-    const extension = normalizedUrl.split('.').pop();
-    if (extension === 'glb') return 'glb';
-    if (extension === 'gltf') return 'gltf';
-    if (extension === 'obj') return 'obj';
-    if (extension === 'ifc') return 'ifc';
-    throw new Error(`Unsupported format: .${extension}. Supported: .glb, .gltf, .obj, .ifc`);
+    const extension = normalizedUrl.split('.').pop() ?? '';
+    const format = ModelManager.EXTENSION_FORMATS[extension];
+    if (!format) {
+      throw new Error(`Unsupported format: .${extension}. Supported: .glb, .gltf, .obj, .ifc`);
+    }
+    return format;
   }
 
   /**
@@ -116,10 +163,7 @@ export class ModelManager {
   async loadModel(url: string, name: string): Promise<THREE.Object3D> {
     try {
       const format = this.getModelFormat(url);
-
-      if (format === 'obj') return await this.loadOBJModel(url, name);
-      if (format === 'ifc') return await this.loadIFCModel(url, name);
-      return await this.loadGLTFModel(url, name, format);
+      return await this.loadStrategies[format].fromUrl(url, name);
     } catch (error) {
       console.error(`Failed to load model ${name}:`, error);
       throw error;
@@ -219,10 +263,20 @@ export class ModelManager {
     }
   }
 
+  /**
+   * Warm the lazily-loaded IFC loader (its JS chunk + worker/WASM setup) ahead
+   * of first use, e.g. during browser idle time, so the first .ifc import does
+   * not wait on the dynamic import. Fire-and-forget and idempotent — a later
+   * real import reuses the same cached loader.
+   */
+  prefetchIFCLoader(): void {
+    void this.ensureIFCLoader().catch(() => {});
+  }
+
   private async loadIFCModel(url: string, name: string): Promise<THREE.Object3D> {
-    await this.initIFCLoader();
+    const ifcLoader = await this.ensureIFCLoader();
     return new Promise((resolve, reject) => {
-      this.ifcLoader.load(
+      ifcLoader.load(
         url,
         (ifcModel: any) => {
           ifcModel.userData.name = name;
@@ -258,16 +312,8 @@ export class ModelManager {
    */
   async loadModelFromFiles(name: string, mainFile: File, mtlFile?: File | null): Promise<THREE.Object3D> {
     try {
-      const fileName = mainFile.name.toLowerCase();
-      let format: ModelFormat = 'glb';
-      if (fileName.endsWith('.obj')) format = 'obj';
-      else if (fileName.endsWith('.gltf')) format = 'gltf';
-      else if (fileName.endsWith('.glb')) format = 'glb';
-      else if (fileName.endsWith('.ifc')) format = 'ifc';
-
-      if (format === 'obj') return await this.loadOBJModelFromFiles(name, mainFile, mtlFile);
-      if (format === 'ifc') return await this.loadIFCModelFromFile(name, mainFile);
-      return await this.loadGLTFModelFromFile(name, mainFile, format);
+      const format = this.getModelFormat(mainFile.name);
+      return await this.loadStrategies[format].fromFiles(name, mainFile, mtlFile);
     } catch (error) {
       console.error(`Failed to load model ${name}:`, error);
       throw error;
@@ -412,14 +458,6 @@ export class ModelManager {
   }
 
   /**
-   * Get animation mixer for a model
-   * @deprecated This method is kept for future use but not currently used in the application
-   */
-  getMixer(name: string): THREE.AnimationMixer | undefined {
-    return this.mixers.get(name);
-  }
-
-  /**
    * Play an animation on a model (GLTF/GLB only)
    */
   playAnimation(modelName: string, animationIndex = 0): THREE.AnimationAction | null {
@@ -455,7 +493,7 @@ export class ModelManager {
       this.scene.remove(model);
 
       const ifcModelId = this.ifcModelIds.get(name);
-      if (ifcModelId !== undefined) {
+      if (ifcModelId !== undefined && this.ifcLoader) {
         // close() is typed void here but returns a promise in worker mode.
         Promise.resolve(this.ifcLoader.ifcManager.close(ifcModelId) as unknown).catch(() => {});
         this.ifcModelIds.delete(name);
@@ -506,9 +544,6 @@ export class ModelManager {
     });
   }
 }
-
-
-
 
 
 

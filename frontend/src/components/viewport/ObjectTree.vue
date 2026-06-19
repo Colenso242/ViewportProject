@@ -11,13 +11,17 @@
       </svg>
       <p>Load a model to see its objects</p>
     </div>
-    <ul v-else class="tree-list">
+    <ul v-else ref="listEl" class="tree-list">
       <li
         v-for="(obj, index) in objectTreeItems"
         :key="index"
         @click="$emit('select', obj)"
+        @keydown="handleKeydown($event, obj)"
         :class="{ 'selected': selectedObject === obj }"
         class="tree-item"
+        role="button"
+        tabindex="0"
+        :aria-pressed="selectedObject === obj"
         :title="obj.name || `Object ${index}`"
       >
         <svg class="item-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -31,15 +35,44 @@
 
 <script setup lang="ts">
 import * as THREE from 'three';
+import { ref, watch, nextTick } from 'vue';
 
-defineProps<{
+const props = defineProps<{
   objectTreeItems: THREE.Object3D[];
   selectedObject: THREE.Object3D | null;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   'select': [obj: THREE.Object3D];
 }>();
+
+const listEl = ref<HTMLElement | null>(null);
+
+function handleKeydown(event: KeyboardEvent, obj: THREE.Object3D): void {
+  const target = event.currentTarget as HTMLElement;
+  switch (event.key) {
+    case 'Enter':
+    case ' ':
+      event.preventDefault();
+      emit('select', obj);
+      break;
+    case 'ArrowDown':
+      event.preventDefault();
+      (target.nextElementSibling as HTMLElement | null)?.focus();
+      break;
+    case 'ArrowUp':
+      event.preventDefault();
+      (target.previousElementSibling as HTMLElement | null)?.focus();
+      break;
+  }
+}
+
+// Keep the selected item visible when selection is driven from the 3D viewport.
+watch(() => props.selectedObject, async (selected) => {
+  if (!selected) return;
+  await nextTick();
+  listEl.value?.querySelector('.tree-item.selected')?.scrollIntoView({ block: 'nearest' });
+});
 </script>
 
 <style scoped>

@@ -16,12 +16,11 @@ export const useSensorStore = defineStore('sensorStore', () => {
     const socket = socketService.connect();
 
     socket.on('sensors-info', (info: SensorConfig[]) => {
-      console.log('📡 Received sensors-info:', info);
+      if (import.meta.env.DEV) console.log('📡 Received sensors-info:', info);
       sensorsInfo.value = info;
     });
 
     socket.on('sensor-update', (data: SensorReading[]) => {
-      // console.log('📊 Received sensor-update:', data);
       const newData = { ...sensorData.value };
       data.forEach(d => { newData[d.id] = d; });
       sensorData.value = newData;
