@@ -46,16 +46,6 @@ const updateGaugeOption = () => {
   const warningPos = Math.min(1, thresholdPos + (1 - thresholdPos) * 0.4);
 
   chartOption.value = {
-    title: {
-      text: `${props.sensorId}`,
-      left: 'center',
-      top: 'bottom',
-      textStyle: {
-        fontSize: 13,
-        color: '#e6ecf5',
-        fontWeight: 600
-      }
-    },
     tooltip: {
       trigger: 'item',
       formatter: () => `${props.sensorId}: ${value.toFixed(2)} ${unit}`.trim()
@@ -68,6 +58,7 @@ const updateGaugeOption = () => {
         min,
         max,
         splitNumber: 5,
+        title: { show: false },
         axisLine: {
           lineStyle: {
             width: 30,

@@ -1,13 +1,35 @@
+# ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
-backend/node_modules/
-frontend/node_modules/
-frontend/dist/
-npm-debug.log*
 
-# Build artifacts
-backend/dist/
+# ── Build outputs ─────────────────────────────────────────────────────────────
+dist/
 *.tsbuildinfo
 
-# Python
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+
+# ── Tool directories ──────────────────────────────────────────────────────────
+.claude/
+.understand-anything/

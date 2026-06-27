@@ -33,21 +33,48 @@ export function useModelLoader(deps: ModelLoaderDeps) {
   async function handleDrop(event: DragEvent): Promise<void> {
     sceneStore.isDragging = false;
     const files = event.dataTransfer?.files;
-    if (!files || files.length === 0) return;
+    if (files) await loadFiles(Array.from(files));
+  }
+
+  /** Load a model from files chosen via the OS file picker. */
+  async function loadFromInput(files: FileList | null): Promise<void> {
+    if (files) await loadFiles(Array.from(files));
+  }
+
+  /** Load the bundled OBJ sample so first-time users have something to explore. */
+  async function loadSampleModel(): Promise<void> {
+    const base = import.meta.env.BASE_URL;
+    try {
+      const [obj, mtl] = await Promise.all([
+        fetch(`${base}models/obj/testcube.obj`).then((r) => r.blob()),
+        fetch(`${base}models/obj/testcube.mtl`).then((r) => r.blob()).catch(() => null),
+      ]);
+      const sample = [new File([obj], 'testcube.obj')];
+      if (mtl) sample.push(new File([mtl], 'testcube.mtl'));
+      await loadFiles(sample);
+    } catch {
+      sceneStore.setLoading('error', 'Could not load the sample model.');
+    }
+  }
+
+  async function loadFiles(files: File[]): Promise<void> {
+    if (files.length === 0) return;
 
     const fileMap = new Map<string, { [key: string]: File }>();
-    for (const file of Array.from(files)) {
+    for (const file of files) {
       const baseName = file.name.replace(/\.(obj|mtl|glb|gltf|ifc)$/i, '');
       if (!fileMap.has(baseName)) fileMap.set(baseName, {});
       const ext = file.name.split('.').pop()?.toLowerCase();
       if (ext) fileMap.get(baseName)![ext] = file;
     }
 
+    let foundSupported = false;
     for (const [, group] of fileMap) {
       const manager = getModelManager();
       try {
         const mainFile = group.ifc || group.obj || group.glb || group.gltf;
         if (!mainFile) continue;
+        foundSupported = true;
 
         sceneStore.setLoading('loading', `Loading ${mainFile.name}...`);
         manager.onImportProgress = (percent, stage) => {
@@ -82,11 +109,16 @@ export function useModelLoader(deps: ModelLoaderDeps) {
         break;
       } catch (error) {
         manager.onImportProgress = null;
+        // Errors persist until dismissed so the user can read why a load failed.
         sceneStore.setLoading('error', `Failed: ${error}`);
-        setTimeout(() => sceneStore.setLoading(null), 3000);
       }
+    }
+
+    // Nothing in the drop/selection was a model we can open.
+    if (!foundSupported) {
+      sceneStore.setLoading('error', 'Unsupported file — use .obj, .glb, .gltf or .ifc');
     }
   }
 
-  return { handleDrop };
+  return { handleDrop, loadFromInput, loadSampleModel };
 }

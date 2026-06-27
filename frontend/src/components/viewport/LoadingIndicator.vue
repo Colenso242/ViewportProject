@@ -5,6 +5,9 @@
       <svg v-else-if="loadingStatus.type === 'success'" class="status-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
       <svg v-else class="status-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
       <p>{{ loadingStatus.message }}</p>
+      <button v-if="loadingStatus.type === 'error'" class="toast-close" @click="$emit('dismiss')" aria-label="Dismiss">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
     </div>
   </Transition>
 </template>
@@ -17,6 +20,10 @@ interface LoadingStatus {
 
 defineProps<{
   loadingStatus: LoadingStatus | null;
+}>();
+
+defineEmits<{
+  dismiss: [];
 }>();
 </script>
 
@@ -43,6 +50,27 @@ defineProps<{
 
 .loading-indicator p {
   margin: 0;
+}
+
+.toast-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 0.25rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.toast-close:hover {
+  color: var(--text);
+  background: var(--surface-3);
 }
 
 .loading-indicator.loading {

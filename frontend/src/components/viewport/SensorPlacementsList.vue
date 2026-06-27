@@ -1,8 +1,14 @@
 <template>
   <aside class="placements-panel">
     <div class="panel-header">
-      <span>Sensor Placements</span>
-      <span v-if="pointSensors.length" class="count-badge">{{ pointSensors.length }}</span>
+      <div class="panel-header-title">
+        <svg class="panel-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <span>Sensor Placements</span>
+        <span v-if="pointSensors.length" class="count-badge">{{ pointSensors.length }}</span>
+      </div>
+      <button class="icon-btn" @click="$emit('close')" aria-label="Close sensor placements" title="Close panel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
     </div>
 
     <div v-if="!pointSensors.length" class="panel-empty">
@@ -14,26 +20,40 @@
 
     <ul v-else class="placements-list">
       <li
-        v-for="point in pointSensors"
+        v-for="(point, index) in pointSensors"
         :key="point.placementId"
         class="placement-item"
         :class="{ selected: point.placementId === selectedPlacementId }"
       >
         <template v-if="confirmingId !== point.placementId">
           <button
-            class="placement-main"
+            class="placement-locate"
             @click="$emit('select', point.placementId)"
             :aria-pressed="point.placementId === selectedPlacementId"
-            :title="point.sensorId || 'Unlinked placement'"
+            :title="`Point ${index + 1} — click to locate in the viewport`"
           >
+            <span class="placement-index">{{ index + 1 }}</span>
             <span class="state-dot" :class="dotClass(point)"></span>
-            <span class="placement-label" :class="{ unlinked: !point.sensorId }">
-              {{ point.sensorId || 'Unlinked' }}
-            </span>
-            <span v-if="reading(point)" class="placement-val">
-              {{ reading(point)!.value }} {{ reading(point)!.unit }}
-            </span>
           </button>
+
+          <select
+            class="placement-link"
+            :value="point.sensorId"
+            :disabled="!sensorOptions.length"
+            :class="{ unlinked: !point.sensorId }"
+            :aria-label="`Link a sensor to point ${index + 1}`"
+            @change="link(point.placementId, ($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">{{ sensorOptions.length ? '— Link sensor —' : 'No sensors' }}</option>
+            <option v-for="sensor in sensorOptions" :key="sensor.id" :value="sensor.id">
+              {{ sensor.id }}
+            </option>
+          </select>
+
+          <span v-if="reading(point)" class="placement-val">
+            {{ reading(point)!.value }}{{ reading(point)!.unit }}
+          </span>
+
           <button
             class="placement-delete"
             @click="confirmingId = point.placementId"
@@ -47,7 +67,7 @@
         </template>
 
         <div v-else class="placement-confirm">
-          <span class="confirm-text">Delete?</span>
+          <span class="confirm-text">Delete point {{ index + 1 }}?</span>
           <button class="confirm-cancel" @click="confirmingId = null">Cancel</button>
           <button class="confirm-delete" @click="remove(point.placementId)">Delete</button>
         </div>
@@ -57,9 +77,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useSensorStore } from '../../stores/useSensorStore';
+import { useSceneStore } from '../../stores/useSceneStore';
 import type { SensorPoint, SensorReading } from '../../types';
 
 defineProps<{
@@ -68,12 +89,21 @@ defineProps<{
 
 defineEmits<{
   'select': [placementId: string];
+  'close': [];
 }>();
 
 const sensorStore = useSensorStore();
-const { pointSensors, sensorData } = storeToRefs(sensorStore);
+const sceneStore = useSceneStore();
+const { pointSensors, sensorData, sensorsInfo } = storeToRefs(sensorStore);
 
+const sensorOptions = computed(() => sensorsInfo.value);
 const confirmingId = ref<string | null>(null);
+
+// Inline link shortcut: associate (or change) the sensor straight from the list,
+// without selecting the point and crossing to the properties panel.
+function link(placementId: string, sensorId: string): void {
+  sensorStore.setPointSensorLink(placementId, sensorId);
+}
 
 function reading(point: SensorPoint): SensorReading | undefined {
   if (!point.sensorId) return undefined;
@@ -91,11 +121,13 @@ function dotClass(point: SensorPoint): string {
 function remove(placementId: string): void {
   confirmingId.value = null;
   sensorStore.removePointSensor(placementId);
+  sceneStore.showActionToast('Sensor point removed');
 }
 </script>
 
 <style scoped>
 .placements-panel {
+  position: relative;
   width: 250px;
   border-right: 1px solid var(--border);
   background: var(--surface);
@@ -105,17 +137,37 @@ function remove(placementId: string): void {
   flex-shrink: 0;
 }
 
+.placements-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent 65%);
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
+  padding: 0.55rem 0.6rem 0.55rem 1rem;
+  color: var(--text-muted);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.panel-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
+}
+
+.panel-icon {
+  color: var(--accent);
   flex-shrink: 0;
 }
 
@@ -154,10 +206,15 @@ function remove(placementId: string): void {
 .placement-item {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.4rem;
+  padding: 0.3rem 0.4rem 0.3rem 0.5rem;
   border-radius: var(--radius-sm);
   border-left: 2px solid transparent;
   margin-bottom: 0.1rem;
+}
+
+.placement-item:hover {
+  background: var(--surface-2);
 }
 
 .placement-item.selected {
@@ -165,29 +222,41 @@ function remove(placementId: string): void {
   border-left-color: var(--accent);
 }
 
-.placement-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
+/* Numbered chip — click to locate the marker in the viewport. */
+.placement-locate {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
+  gap: 0.4rem;
+  padding: 0.2rem 0.3rem;
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  text-align: left;
-  transition: color 0.12s ease;
+  flex-shrink: 0;
 }
 
-.placement-item:hover .placement-main {
+.placement-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.placement-item:hover .placement-index {
   color: var(--text);
 }
 
-.placement-item.selected .placement-main {
-  color: var(--accent);
+.placement-item.selected .placement-index {
+  background: var(--accent);
+  color: #fff;
 }
 
 .state-dot {
@@ -216,19 +285,36 @@ function remove(placementId: string): void {
   background: var(--accent);
 }
 
-.placement-label {
+/* Inline link shortcut — pick/change the sensor without leaving the list. */
+.placement-link {
   flex: 1;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: auto;
+  padding: 0.3rem 0.4rem;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
   font-family: var(--font-mono);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
 }
 
-.placement-label.unlinked {
+.placement-link:hover:not(:disabled),
+.placement-link:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.placement-link.unlinked {
   font-family: inherit;
-  font-style: italic;
-  color: var(--text-faint);
+  color: var(--text-muted);
+}
+
+.placement-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .placement-val {

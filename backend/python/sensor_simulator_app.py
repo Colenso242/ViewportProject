@@ -1,6 +1,17 @@
 """Main application for the IoT sensor simulator."""
 import time
 import sys
+
+# Windows consoles default to a non-UTF-8 code page (e.g. cp1252) that cannot
+# encode the emoji used in the log output, which would crash the simulator on
+# its very first print() before any data is generated. Force UTF-8 so it runs
+# regardless of the host console encoding.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except (AttributeError, ValueError):
+    pass
+
 from database_manager import DatabaseManager
 from sensor_data_generator import SensorDataGenerator
 from config import SensorConfig

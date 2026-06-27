@@ -4,17 +4,18 @@ import { storeToRefs } from 'pinia';
 import VChart from 'vue-echarts';
 import { use } from 'echarts/core';
 import { LineChart } from 'echarts/charts';
-import { TooltipComponent, GridComponent, DataZoomComponent, MarkLineComponent, VisualMapComponent } from 'echarts/components';
+import { TooltipComponent, GridComponent, DataZoomComponent, MarkLineComponent, AxisPointerComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { ApiService } from '../../services/ApiService';
 import { useSensorStore } from '../../stores/useSensorStore';
 
 use([
   TooltipComponent,
+  // Registered for `tooltip: { trigger: 'axis' }` so the axis pointer resolves.
+  AxisPointerComponent,
   GridComponent,
   DataZoomComponent,
   MarkLineComponent,
-  VisualMapComponent,
   LineChart,
   CanvasRenderer
 ]);
@@ -99,6 +100,39 @@ function lineColorForStatus(): string {
   return COLOR.accent;
 }
 
+type ChartPoint = { value: [number, number] };
+
+// Split the line at the threshold into a blue "below" and red "above" series.
+// ECharts 6's visualMap-based recolouring crashes here, so we colour by
+// splitting the data: where a segment crosses the limit we insert the exact
+// interpolated crossing point into both series (with `null` elsewhere) so the
+// two coloured segments meet precisely on the line.
+function buildSplitSeries(points: ChartPoint[], limit: number, markLine: unknown) {
+  const below: (number | null)[][] = [];
+  const above: (number | null)[][] = [];
+
+  for (let i = 0; i < points.length; i++) {
+    const [t, v] = points[i].value;
+    if (i > 0) {
+      const [pt, pv] = points[i - 1].value;
+      if ((pv < limit && v > limit) || (pv > limit && v < limit)) {
+        const ratio = (limit - pv) / (v - pv);
+        const crossingTime = pt + (t - pt) * ratio;
+        below.push([crossingTime, limit]);
+        above.push([crossingTime, limit]);
+      }
+    }
+    below.push([t, v <= limit ? v : null]);
+    above.push([t, v >= limit ? v : null]);
+  }
+
+  const common = { type: 'line', showSymbol: false, smooth: false, connectNulls: false } as const;
+  return [
+    { ...common, name: 'below', data: below, lineStyle: { width: 2, color: COLOR.accent }, areaStyle: { color: COLOR.accent, opacity: 0.1 }, markLine },
+    { ...common, name: 'above', data: above, lineStyle: { width: 2, color: COLOR.danger }, areaStyle: { color: COLOR.danger, opacity: 0.1 } }
+  ];
+}
+
 const fetchHistoricalData = async () => {
   isLoading.value = true;
   try {
@@ -119,6 +153,37 @@ const updateChartOptions = () => {
   const limit = threshold.value;
   const base = lineColorForStatus();
 
+  const markLine = limit != null
+    ? {
+        silent: true,
+        symbol: 'none',
+        lineStyle: { color: COLOR.danger, type: 'dashed', width: 1 },
+        label: {
+          formatter: `Limit ${formatNum(limit)} ${unit.value}`.trim(),
+          color: COLOR.danger,
+          fontSize: 10,
+          position: 'insideEndTop'
+        },
+        data: [{ yAxis: limit }]
+      }
+    : undefined;
+
+  const series = limit != null
+    ? buildSplitSeries(chartData.value, limit, markLine)
+    : [
+        {
+          name: props.sensorId,
+          type: 'line',
+          showSymbol: false,
+          smooth: 0.2,
+          sampling: 'lttb',
+          data: chartData.value,
+          lineStyle: { width: 2, color: base },
+          itemStyle: { color: base },
+          areaStyle: { opacity: 0.12 }
+        }
+      ];
+
   chartOption.value = {
     backgroundColor: 'transparent',
     textStyle: { fontFamily: 'inherit' },
@@ -128,7 +193,9 @@ const updateChartOptions = () => {
       borderColor: COLOR.borderStrong,
       textStyle: { color: COLOR.text },
       formatter: (params: any) => {
-        const point = Array.isArray(params) ? params[0] : params;
+        const arr = Array.isArray(params) ? params : [params];
+        // With the split series only one of the two has a value at each x.
+        const point = arr.find((p: any) => p?.value?.[1] != null) ?? arr[0];
         const time = formatClock(point.value[0]);
         const reading = `${formatNum(point.value[1])} ${unit.value}`.trim();
         return `${time}<br/><strong>${reading}</strong>`;
@@ -149,20 +216,6 @@ const updateChartOptions = () => {
       splitLine: { lineStyle: { color: COLOR.border } },
       axisLabel: { color: COLOR.muted }
     },
-    // Recolor the line where it crosses the limit, so a breach is obvious
-    // without reading the axis. Falls back to a single status color when the
-    // sensor has no configured threshold.
-    visualMap: limit != null
-      ? {
-          show: false,
-          dimension: 1,
-          seriesIndex: 0,
-          pieces: [
-            { lte: limit, color: COLOR.accent },
-            { gt: limit, color: COLOR.danger }
-          ]
-        }
-      : undefined,
     dataZoom: [
       { type: 'inside', start: 0, end: 100 },
       {
@@ -182,33 +235,7 @@ const updateChartOptions = () => {
         }
       }
     ],
-    series: [
-      {
-        name: props.sensorId,
-        type: 'line',
-        showSymbol: false,
-        smooth: 0.2,
-        sampling: 'lttb',
-        data: chartData.value,
-        lineStyle: limit != null ? { width: 2 } : { width: 2, color: base },
-        itemStyle: limit != null ? undefined : { color: base },
-        areaStyle: { opacity: 0.12 },
-        markLine: limit != null
-          ? {
-              silent: true,
-              symbol: 'none',
-              lineStyle: { color: COLOR.danger, type: 'dashed', width: 1 },
-              label: {
-                formatter: `Limit ${formatNum(limit)} ${unit.value}`.trim(),
-                color: COLOR.danger,
-                fontSize: 10,
-                position: 'insideEndTop'
-              },
-              data: [{ yAxis: limit }]
-            }
-          : undefined
-      }
-    ]
+    series
   };
 };
 

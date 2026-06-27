@@ -2,17 +2,17 @@
   <section class="prop-group">
     <h3>{{ pointSensorId ? 'IoT Sensor Point' : 'IoT Sensor Link' }}</h3>
 
-    <select v-model="linkedSensor" @change="updateLink" class="select-control sensor-select">
-      <option value="">-- No Sensor --</option>
-      <option v-for="sensor in sensorOptions" :key="sensor.id" :value="sensor.id">
-        {{ sensor.id }} ({{ sensor.name || sensor.unit || 'sensor' }})
-      </option>
-    </select>
+    <SensorSelect
+      :model-value="linkedSensor"
+      placeholder="-- No Sensor --"
+      class="sensor-select"
+      @update:model-value="onPick"
+    />
 
     <div v-if="linkedSensorData" class="sensor-live-data">
       <div class="prop-row">
         <span class="prop-label">Live Value</span>
-        <span class="prop-value" :style="getSensorValueColor()">
+        <span class="prop-value" :class="valueStatus">
           {{ linkedSensorData.value }} {{ linkedSensorData.unit }}
         </span>
       </div>
@@ -48,14 +48,16 @@ import * as THREE from 'three';
 import { computed, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useSensorStore } from '../../../stores/useSensorStore';
+import { useSceneStore } from '../../../stores/useSceneStore';
+import SensorSelect from '../../common/SensorSelect.vue';
 
 const props = defineProps<{
   selectedObject: THREE.Object3D;
 }>();
 
 const sensorStore = useSensorStore();
-const { sensorsInfo, sensorData, sensorMappings, pointSensors } = storeToRefs(sensorStore);
-const sensorOptions = computed(() => sensorsInfo.value);
+const sceneStore = useSceneStore();
+const { sensorData, sensorMappings, pointSensors } = storeToRefs(sensorStore);
 
 const linkedSensor = ref('');
 const confirming = ref(false);
@@ -85,6 +87,11 @@ watch(
   { immediate: true }
 );
 
+function onPick(sensorId: string) {
+  linkedSensor.value = sensorId;
+  updateLink();
+}
+
 function updateLink() {
   if (pointSensorId.value) {
     sensorStore.setPointSensorLink(pointSensorId.value, linkedSensor.value);
@@ -97,6 +104,7 @@ function removePoint() {
   confirming.value = false;
   if (pointSensorId.value) {
     sensorStore.removePointSensor(pointSensorId.value);
+    sceneStore.showActionToast('Sensor point removed');
   }
 }
 
@@ -105,12 +113,14 @@ const linkedSensorData = computed(() => {
   return sensorData.value[linkedSensor.value] || null;
 });
 
-function getSensorValueColor() {
-  if (!linkedSensorData.value) return {};
-  if (linkedSensorData.value.isCritical) return { color: '#ef4444' };
-  if (linkedSensorData.value.isWarning) return { color: '#fbbf24' };
-  return { color: '#10b981' };
-}
+// Status class for the live value, mapped to the shared design tokens.
+const valueStatus = computed(() => {
+  const data = linkedSensorData.value;
+  if (!data) return '';
+  if (data.isCritical) return 'critical';
+  if (data.isWarning) return 'warning';
+  return 'ok';
+});
 </script>
 
 <style scoped>
@@ -144,6 +154,10 @@ function getSensorValueColor() {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+
+.prop-value.ok { color: var(--success); }
+.prop-value.warning { color: var(--warning); }
+.prop-value.critical { color: var(--danger); }
 
 .sensor-select {
   margin-bottom: 0.75rem;

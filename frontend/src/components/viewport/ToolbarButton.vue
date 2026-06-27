@@ -1,5 +1,5 @@
 <template>
-  <button class="toolbar-btn" :class="{ active }">
+  <button class="toolbar-btn" :class="{ active }" :disabled="disabled">
     <slot name="icon" />
     <slot />
     <span v-if="$slots.trailing" class="toggle-state"><slot name="trailing" /></span>
@@ -9,6 +9,7 @@
 <script setup lang="ts">
 defineProps<{
   active?: boolean;
+  disabled?: boolean;
 }>();
 </script>
 
@@ -28,10 +29,15 @@ defineProps<{
   transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
-.toolbar-btn:hover {
+.toolbar-btn:hover:not(:disabled) {
   color: var(--text);
   background: var(--surface-2);
   border-color: var(--text-faint);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .toolbar-btn.active {

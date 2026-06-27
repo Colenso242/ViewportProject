@@ -13,6 +13,13 @@ type ModelFormat = 'glb' | 'gltf' | 'obj' | 'ifc';
 
 export type ImportProgressCallback = (percent: number, stage: 'download' | 'parse') => void;
 
+// web-ifc entity type codes for geometry the monitoring view never shows.
+// IfcSpace = invisible room volumes (loaded by web-ifc-three by default);
+// IfcOpeningElement = door/window voids already cut into walls via booleans.
+// Skipping them avoids tessellating throwaway meshes. Stable web-ifc codes.
+const IFC_SPACE = 3856911033;
+const IFC_OPENING_ELEMENT = 3588315303;
+
 /**
  * Per-format loading strategy: each entry knows how to load its format from a
  * URL or from dropped File objects, so callers dispatch via a table lookup
@@ -96,11 +103,31 @@ export class ModelManager {
 
         // Georeferenced models sit millions of units from the origin; moving
         // them to the origin avoids float-precision jitter and speeds up
-        // the bounds computation that follows.
+        // the bounds computation that follows. USE_FAST_BOOLS accelerates the
+        // boolean ops used to cut openings (doors/windows) — the dominant cost
+        // on real BIM models — at a negligible accuracy tradeoff. Coarser
+        // CIRCLE_SEGMENTS (defaults 5/8/12) cut triangle counts on curved
+        // geometry; smoothness isn't critical for a monitoring viewport.
         try {
-          await manager.applyWebIfcConfig({ COORDINATE_TO_ORIGIN: true });
+          await manager.applyWebIfcConfig({
+            COORDINATE_TO_ORIGIN: true,
+            USE_FAST_BOOLS: true,
+            CIRCLE_SEGMENTS_LOW: 4,
+            CIRCLE_SEGMENTS_MEDIUM: 6,
+            CIRCLE_SEGMENTS_HIGH: 9,
+          });
         } catch (error) {
           console.warn('Could not apply web-ifc config:', error);
+        }
+
+        // Don't generate geometry for categories the twin view never renders.
+        try {
+          await manager.parser.setupOptionalCategories({
+            [IFC_SPACE]: false,
+            [IFC_OPENING_ELEMENT]: false,
+          });
+        } catch (error) {
+          console.warn('Could not configure IFC optional categories:', error);
         }
 
         manager.setOnProgress((event) => {

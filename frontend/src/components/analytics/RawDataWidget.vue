@@ -1,74 +1,67 @@
 <template>
   <div class="raw-data-widget">
-    <div class="widget-header">
-      <select v-model="selectedSensor" class="select-control">
-        <option v-for="sensor in sensorsInfo" :key="sensor.id" :value="sensor.id">
-          {{ sensor.id }}
-        </option>
-      </select>
-    </div>
+    <SensorSelect v-model="selectedSensor" auto-select-first class="raw-picker" />
 
-    <div class="widget-content">
-      <div v-if="!selectedSensorData" class="empty-state">
-        Waiting for data...
+    <div v-if="!reading" class="empty-state">Waiting for the first reading…</div>
+
+    <div v-else class="readout">
+      <div class="readout-head">
+        <span class="readout-value" :class="statusClass">
+          {{ formatNum(reading.value) }}<span class="readout-unit">{{ reading.unit }}</span>
+        </span>
+        <span class="status-badge" :class="statusClass">{{ statusClass.toUpperCase() }}</span>
       </div>
-      <div v-else class="data-grid">
-        <div class="data-row">
-          <span class="label">Timestamp:</span>
-          <span class="value">{{ new Date(selectedSensorData.timestamp).toLocaleTimeString() }}</span>
+
+      <dl class="readout-meta">
+        <div class="meta-row">
+          <dt>Sensor</dt>
+          <dd class="mono">{{ reading.id }}</dd>
         </div>
-        <div class="data-row">
-          <span class="label">Sensor ID:</span>
-          <span class="value">{{ selectedSensorData.id }}</span>
+        <div class="meta-row">
+          <dt>Type</dt>
+          <dd>{{ reading.type }}</dd>
         </div>
-        <div class="data-row">
-          <span class="label">Type:</span>
-          <span class="value">{{ selectedSensorData.type }}</span>
+        <div class="meta-row">
+          <dt>Threshold</dt>
+          <dd class="mono">{{ formatNum(reading.threshold) }} {{ reading.unit }}</dd>
         </div>
-        <div class="data-row">
-          <span class="label">Value:</span>
-          <span class="value" :class="{ 'warning': selectedSensorData.isWarning, 'critical': selectedSensorData.isCritical }">
-            {{ selectedSensorData.value }} {{ selectedSensorData.unit }}
-          </span>
+        <div class="meta-row">
+          <dt>Updated</dt>
+          <dd class="mono">{{ formatTime(reading.timestamp) }}</dd>
         </div>
-        <div class="data-row">
-          <span class="label">Threshold:</span>
-          <span class="value">{{ selectedSensorData.threshold }} {{ selectedSensorData.unit }}</span>
-        </div>
-        <div class="data-row">
-          <span class="label">Status:</span>
-          <span class="value">
-            <span v-if="selectedSensorData.isCritical" class="status-badge critical">CRITICAL</span>
-            <span v-else-if="selectedSensorData.isWarning" class="status-badge warning">WARNING</span>
-            <span v-else class="status-badge ok">OK</span>
-          </span>
-        </div>
-      </div>
+      </dl>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useSensorStore } from '../../stores/useSensorStore';
+import SensorSelect from '../common/SensorSelect.vue';
 
 const sensorStore = useSensorStore();
-const { sensorData, sensorsInfo } = storeToRefs(sensorStore);
+const { sensorData } = storeToRefs(sensorStore);
 
 const selectedSensor = ref('');
 
-// Auto-select first available sensor
-watch(sensorsInfo, (info) => {
-  if (info && info.length > 0 && !selectedSensor.value) {
-    selectedSensor.value = info[0].id;
-  }
-}, { immediate: true });
+const reading = computed(() => (selectedSensor.value ? sensorData.value[selectedSensor.value] ?? null : null));
 
-const selectedSensorData = computed(() => {
-  if (!selectedSensor.value) return null;
-  return sensorData.value[selectedSensor.value] || null;
+const statusClass = computed(() => {
+  const r = reading.value;
+  if (!r) return 'ok';
+  if (r.isCritical) return 'critical';
+  if (r.isWarning) return 'warning';
+  return 'ok';
 });
+
+function formatNum(v: number): string {
+  return Number.isInteger(v) ? String(v) : v.toFixed(2);
+}
+
+function formatTime(timestamp: string | Date): string {
+  return new Date(timestamp).toLocaleTimeString();
+}
 </script>
 
 <style scoped>
@@ -78,64 +71,90 @@ const selectedSensorData = computed(() => {
   height: 100%;
 }
 
-.widget-header {
+.raw-picker {
   margin-bottom: 1rem;
 }
 
-.widget-content {
+.readout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  overflow-y: auto;
 }
 
-.data-grid {
+.readout-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.readout-value {
+  font-family: var(--font-mono);
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.readout-value.warning { color: var(--warning); }
+.readout-value.critical { color: var(--danger); }
+
+.readout-unit {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 0.35rem;
+}
+
+.readout-meta {
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
   background: var(--bg);
-  padding: 1rem;
-  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.85rem;
 }
 
-.data-row {
+.meta-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 0.5rem;
+  padding: 0.45rem 0;
   border-bottom: 1px solid var(--border);
 }
 
-.data-row:last-child {
+.meta-row:last-child {
   border-bottom: none;
-  padding-bottom: 0;
 }
 
-.label {
-  color: var(--text-muted);
+.meta-row dt {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.meta-row dd {
+  margin: 0;
   font-size: 0.85rem;
-}
-
-.value {
   color: var(--text);
-  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
-.value.critical {
-  color: var(--danger);
-}
-
-.value.warning {
-  color: var(--warning);
+.meta-row dd.mono {
+  font-family: var(--font-mono);
 }
 
 .empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-faint);
-  text-align: center;
-  padding: 2rem;
+  font-size: 0.85rem;
 }
 </style>
-

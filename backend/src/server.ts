@@ -60,6 +60,15 @@ class ServerBootstrap {
     try {
       await this._initializeServices();
 
+      this.server.on('error', (error: NodeJS.ErrnoException) => {
+        if (error.code === 'EADDRINUSE') {
+          console.error(`Port ${serverConfig.PORT} is already in use — stop the other process or set a different PORT.`);
+        } else {
+          console.error('HTTP server error:', error);
+        }
+        process.exit(1);
+      });
+
       this.server.listen(serverConfig.PORT, () => {
         console.log(`Server listening at http://localhost:${serverConfig.PORT}`);
       });

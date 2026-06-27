@@ -238,6 +238,27 @@ input {
   transform-origin: bottom left;
 }
 
+/* Shared "live instrument" accent edge along the top. */
+.floating-dashboard-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent 65%);
+  z-index: 1;
+}
+
+.floating-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.floating-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
 /* Pop the dashboard up from its corner on open, and back down on close. */
 .popover-enter-active {
   transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
